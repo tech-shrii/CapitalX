@@ -1,0 +1,326 @@
+# ============================================================================
+# CapitalX Portfolio Management System - .gitignore
+# Comprehensive exclusions for Maven, IDEs, databases, credentials, and OS files
+# ============================================================================
+
+# ============================================================================
+# Maven Build Artifacts
+# ============================================================================
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+*.pom
+
+# Exception: Keep source files in build directories
+!**/src/main/**/target/
+!**/src/test/**/target/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# ============================================================================
+# IDE Configurations & Workspace Settings
+# ============================================================================
+
+### IntelliJ IDEA / JetBrains ###
+.idea/
+.idea_modules/
+*.iml
+*.iws
+*.ipr
+*.rar
+.settings/
+out/
+
+### Spring Tool Suite (STS) ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+nbproject/
+build/
+
+### VS Code ###
+.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+launch.json
+settings.json
+extensions.json
+
+### Eclipse ###
+.metadata
+.settings/
+.classpath
+.project
+.externalToolBuilders/
+*.launch
+RemoteSystemsTempFiles/
+
+### Sublime Text ###
+*.sublime-project
+*.sublime-workspace
+
+### Vim ###
+*.swp
+*.swo
+*~
+.vim/
+
+# ============================================================================
+# Compiled Classes & Packages
+# ============================================================================
+*.class
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+*.zip
+*.log.gz
+
+# ============================================================================
+# Log Files
+# ============================================================================
+*.log
+logs/
+log/
+*.log.*
+spring-boot.log
+application.log
+
+# ============================================================================
+# Runtime & JVM Artifacts
+# ============================================================================
+*.ser
+hs_err_pid*
+*.hprof
+java_pid*.hprof
+jvm.log
+
+# ============================================================================
+# Operating System Files
+# ============================================================================
+
+### macOS ###
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+### Windows ###
+Thumbs.db
+desktop.ini
+[Dd]esktop.ini
+
+### Linux ###
+.directory
+
+# ============================================================================
+# Temporary & Backup Files
+# ============================================================================
+*.tmp
+*.temp
+*.bak
+*.backup
+*~
+.~*
+*.orig
+*.rej
+
+# ============================================================================
+# Database Files (Local Development Only)
+# ============================================================================
+*.db
+*.sqlite
+*.sqlite3
+*.mdb
+database.properties
+db.properties
+h2.db
+h2.trace.db
+
+# ============================================================================
+# Environment & Configuration Files (SECRETS)
+# ============================================================================
+# IMPORTANT: Never commit sensitive credentials to version control!
+
+.env
+.env.local
+.env.*.local
+.env.prod
+.env.dev
+.env.test
+.env.example
+environment.properties
+credentials.json
+secrets.json
+private-key.pem
+*.pem
+*.key
+*.p8
+*.p12
+*.pfx
+.aws/
+.aws/credentials
+.aws/config
+.gcp/
+
+# ============================================================================
+# Application-Specific Uploads & Temporary Data
+# ============================================================================
+uploads/
+temp/
+cache/
+.cache/
+tmp/
+data/
+output/
+
+# ============================================================================
+# Excel & CSV Files (Uploaded Data)
+# ============================================================================
+# NOTE: Keep sample/test Excel files in docs/samples/ with README instead
+*.xlsx
+*.xls
+*.csv
+*.xlsm
+
+# ============================================================================
+# Gradle (if applicable in future)
+# ============================================================================
+.gradle/
+gradle/
+gradlew
+gradlew.bat
+build/
+.gradle/
+
+# ============================================================================
+# Node.js / npm (if using frontend build tools)
+# ============================================================================
+node_modules/
+npm-debug.log
+npm-error.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# ============================================================================
+# Python (if using Jython or Python tools)
+# ============================================================================
+*.py[cod]
+__pycache__/
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ============================================================================
+# Lombok & Annotation Processing
+# ============================================================================
+.apt_generated/
+.apt_generated_tests/
+
+# ============================================================================
+# Test Reports & Coverage
+# ============================================================================
+test-results/
+junit-reports/
+coverage/
+jacoco.exec
+.coverage
+target/site/
+
+# ============================================================================
+# SonarQube & Code Analysis
+# ============================================================================
+.scannerwork/
+checkstyle-result.xml
+findbugs-report.xml
+pmd-report.xml
+cpd-report.xml
+
+# ============================================================================
+# Project-Specific Configuration & Secrets
+# ============================================================================
+config/secrets/
+config/credentials/
+config/local/
+config/prod/
+
+# ============================================================================
+# Docker-Related
+# ============================================================================
+.dockerignore
+docker-compose.override.yml
+Dockerfile.local
+
+# ============================================================================
+# CI/CD Pipeline Artifacts
+# ============================================================================
+.github/workflows/*.local.yml
+.gitlab-ci.local.yml
+.travis.local.yml
+ci/local/
+
+# ============================================================================
+# Build Tools Cache
+# ============================================================================
+.sts4-cache/
+.eclipse/
+.eclipse
+
+# ============================================================================
+# Documentation Builds
+# ============================================================================
+docs/build/
+docs/_build/
+site/
+target/site/
+
+# ============================================================================
+# IDE-Generated Files
+# ============================================================================
+*.iml
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/modules.xml
+.idea/misc.xml
+.idea/vcs.xml
+.idea/inspectionProfiles/
+.idea/runConfigurations/
+
+# ============================================================================
+# Miscellaneous
+# ============================================================================
+HELP.md
+*.orig
+*.rej
+.factorypath

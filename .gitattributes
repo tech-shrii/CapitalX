@@ -1,0 +1,148 @@
+# ============================================================================
+# .gitattributes - Normalize line endings and handle binary files
+# Ensures consistent behavior across Windows, Mac, and Linux
+# ============================================================================
+
+# Auto detect text files and normalize line endings to LF
+* text=auto
+
+# ============================================================================
+# Source Code & Configuration Files - LF Line Endings (Unix style)
+# ============================================================================
+*.java text eol=lf
+*.properties text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.xml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.csv text eol=lf
+*.sql text eol=lf
+*.gradle text eol=lf
+*.maven text eol=lf
+
+# ============================================================================
+# Shell Scripts - LF Line Endings
+# ============================================================================
+*.sh text eol=lf
+*.bash text eol=lf
+mvnw text eol=lf
+
+# ============================================================================
+# Windows Batch & PowerShell Files - CRLF Line Endings (Windows style)
+# ============================================================================
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+mvnw.cmd text eol=crlf
+
+# ============================================================================
+# Documentation Files - LF Line Endings
+# ============================================================================
+*.md text eol=lf
+*.markdown text eol=lf
+*.rst text eol=lf
+README* text eol=lf
+LICENSE* text eol=lf
+AUTHORS* text eol=lf
+CHANGELOG* text eol=lf
+CONTRIBUTING* text eol=lf
+HELP.md text eol=lf
+
+# ============================================================================
+# Build & Deployment Configuration - LF Line Endings
+# ============================================================================
+Dockerfile text eol=lf
+docker-compose.yml text eol=lf
+.dockerignore text eol=lf
+.github text eol=lf
+.gitlab-ci.yml text eol=lf
+.travis.yml text eol=lf
+
+# ============================================================================
+# IDE Configuration Files - LF Line Endings
+# ============================================================================
+.editorconfig text eol=lf
+.eslintrc* text eol=lf
+.prettierrc* text eol=lf
+.gitignore text eol=lf
+
+# ============================================================================
+# Binary Files - No Conversion
+# ============================================================================
+
+# Compiled Classes & Archives
+*.class binary
+*.jar binary
+*.war binary
+*.ear binary
+*.zip binary
+*.tar binary
+*.gz binary
+*.rar binary
+*.7z binary
+*.iso binary
+*.gzip binary
+
+# Executables
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
+*.o binary
+*.a binary
+
+# ============================================================================
+# Image Files - Binary
+# ============================================================================
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.jpe binary
+*.gif binary
+*.svg binary
+*.ico binary
+*.bmp binary
+*.tiff binary
+*.tif binary
+*.webp binary
+
+# ============================================================================
+# Document Files - Binary
+# ============================================================================
+*.pdf binary
+*.doc binary
+*.docx binary
+*.xls binary
+*.xlsx binary
+*.ppt binary
+*.pptx binary
+*.odt binary
+*.ods binary
+*.odp binary
+
+# ============================================================================
+# Media Files - Binary
+# ============================================================================
+*.mp3 binary
+*.mp4 binary
+*.avi binary
+*.mov binary
+*.flv binary
+*.wmv binary
+*.wav binary
+
+# ============================================================================
+# Maven Wrapper - Special Handling
+# ============================================================================
+.mvn/wrapper/maven-wrapper.jar binary
+.mvn/wrapper/maven-wrapper.properties text eol=lf
+
+# ============================================================================
+# Database Files - Binary
+# ============================================================================
+*.db binary
+*.sqlite binary
+*.sqlite3 binary
+*.mdb binary

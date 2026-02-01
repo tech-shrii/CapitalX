@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Portfolio Manager</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../css/dashboard.css">
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <h2>Portfolio Manager</h2>
+        </div>
+        <ul class="sidebar-menu">
+            <li><a href="home.html" class="active">Dashboard</a></li>
+            <li><a href="client-detail.html">Clients</a></li>
+            <li><a href="news.html">News</a></li>
+            <li><a href="statements.html">Statements</a></li>
+            <li><a href="settings.html">Settings</a></li>
+            <li><a href="#" id="logoutBtn">Logout</a></li>
+        </ul>
+    </nav>
+
+    <main class="main-content">
+        <header class="top-bar">
+            <h1>Dashboard</h1>
+            <div class="user-info">
+                <span id="userName"></span>
+            </div>
+        </header>
+
+        <div class="dashboard-grid">
+            <div class="summary-card">
+                <h3>Total Clients</h3>
+                <p class="summary-value" id="totalClients">0</p>
+            </div>
+            <div class="summary-card">
+                <h3>Total Assets</h3>
+                <p class="summary-value" id="totalAssets">0</p>
+            </div>
+            <div class="summary-card">
+                <h3>Total Invested</h3>
+                <p class="summary-value" id="totalInvested">₹0</p>
+            </div>
+            <div class="summary-card">
+                <h3>Current Value</h3>
+                <p class="summary-value" id="currentValue">₹0</p>
+            </div>
+            <div class="summary-card profit-loss">
+                <h3>Total P&L</h3>
+                <p class="summary-value" id="totalPnL">₹0</p>
+                <p class="summary-percent" id="totalPnLPercent">0%</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Recent Clients</h2>
+            <div id="recentClients" class="clients-list"></div>
+        </div>
+    </main>
+
+    <script src="../js/api.js"></script>
+    <script src="../js/dashboard.js"></script>
+</body>
+</html>

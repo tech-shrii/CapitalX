@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Statements - Portfolio Manager</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../css/dashboard.css">
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <h2>Portfolio Manager</h2>
+        </div>
+        <ul class="sidebar-menu">
+            <li><a href="home.html">Dashboard</a></li>
+            <li><a href="client-detail.html">Clients</a></li>
+            <li><a href="news.html">News</a></li>
+            <li><a href="statements.html" class="active">Statements</a></li>
+            <li><a href="settings.html">Settings</a></li>
+            <li><a href="#" id="logoutBtn">Logout</a></li>
+        </ul>
+    </nav>
+
+    <main class="main-content">
+        <header class="top-bar">
+            <h1>Generate Statements</h1>
+        </header>
+
+        <div class="section">
+            <form id="statementForm">
+                <div class="form-group">
+                    <label>Select Client</label>
+                    <select id="statementClientId" required></select>
+                </div>
+                <div class="form-group">
+                    <label>Statement Type</label>
+                    <select id="statementType" required>
+                        <option value="BASIC_PNL">Basic P&L</option>
+                        <option value="DETAILED">Detailed</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Email To</label>
+                    <input type="email" id="statementEmail" placeholder="Leave empty to use client email">
+                </div>
+                <button type="submit" class="btn btn-primary">Generate & Send Statement</button>
+            </form>
+            <div id="statementMessage" class="message"></div>
+        </div>
+    </main>
+
+    <script src="../js/api.js"></script>
+    <script src="../js/statements.js"></script>
+</body>
+</html>

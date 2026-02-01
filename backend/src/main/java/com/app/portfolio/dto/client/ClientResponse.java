@@ -13,6 +13,7 @@ public class ClientResponse {
     private String name;
     private String email;
     private String phone;
+    private String currency;
     private Instant createdAt;
     private Instant updatedAt;
 }

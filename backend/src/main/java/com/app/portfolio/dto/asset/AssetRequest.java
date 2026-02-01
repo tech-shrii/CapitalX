@@ -33,4 +33,7 @@ public class AssetRequest {
 
     @NotNull(message = "Purchase date is required")
     private LocalDate purchaseDate;
+
+    @Size(max = 3)
+    private String currency;
 }

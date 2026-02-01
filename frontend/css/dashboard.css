@@ -267,6 +267,113 @@ body {
     text-decoration: underline;
 }
 
+/* Chart Styles */
+.header-controls {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.last-update {
+    font-size: 14px;
+    color: var(--text-light);
+    padding: 0.5rem 1rem;
+    background-color: var(--bg-color);
+    border-radius: 4px;
+}
+
+.portfolio-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.portfolio-summary .summary-card {
+    box-shadow: none;
+    border: 1px solid var(--border-color);
+}
+
+.chart-controls {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    align-items: center;
+}
+
+.chart-controls select,
+.chart-controls input {
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.asset-chart-container {
+    margin-bottom: 2rem;
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--bg-color);
+}
+
+.asset-chart-container h3 {
+    margin-bottom: 1rem;
+    color: var(--text-color);
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+    font-size: 14px;
+}
+
+.data-table th,
+.data-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.data-table th {
+    background-color: var(--bg-color);
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.data-table tr:hover {
+    background-color: var(--bg-color);
+}
+
+.data-table .center {
+    text-align: center;
+}
+
+.data-table .error {
+    color: var(--danger-color);
+}
+
+.info-text {
+    color: var(--text-light);
+    font-style: italic;
+    margin-top: 1rem;
+}
+
+.form-control {
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 14px;
+    background-color: var(--white);
+    color: var(--text-color);
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .sidebar {
@@ -279,6 +386,16 @@ body {
     
     .dashboard-grid {
         grid-template-columns: 1fr;
+    }
+
+    .chart-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .header-controls {
+        flex-direction: column;
+        align-items: flex-start;
     }
 }
 

@@ -45,6 +45,9 @@ public class Asset {
     @Column(name = "purchase_date", nullable = false)
     private LocalDate purchaseDate;
 
+    @Column(length = 3)
+    private String currency;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

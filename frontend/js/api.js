@@ -93,3 +93,4 @@ window.getAuthToken = getAuthToken;
 window.getUserId = getUserId;
 window.redirectToLogin = redirectToLogin;
 window.checkAuth = checkAuth;
+window.API_BASE_URL = API_BASE_URL;

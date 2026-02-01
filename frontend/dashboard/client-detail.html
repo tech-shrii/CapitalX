@@ -49,15 +49,28 @@
                 <form id="addClientForm">
                     <div class="form-group">
                         <label>Name</label>
-                        <input type="text" id="clientName" required>
+                        <input type="text" id="clientName" required placeholder="Client name">
                     </div>
                     <div class="form-group">
                         <label>Email</label>
-                        <input type="email" id="clientEmail" required>
+                        <input type="email" id="clientEmail" required placeholder="email@example.com">
                     </div>
                     <div class="form-group">
                         <label>Phone</label>
-                        <input type="tel" id="clientPhone">
+                        <input type="tel" id="clientPhone" placeholder="+1 234 567 8900">
+                    </div>
+                    <div class="form-group">
+                        <label>Currency</label>
+                        <select id="clientCurrency">
+                            <option value="USD">USD</option>
+                            <option value="EUR">EUR</option>
+                            <option value="GBP">GBP</option>
+                            <option value="INR">INR</option>
+                            <option value="JPY">JPY</option>
+                            <option value="CHF">CHF</option>
+                            <option value="CAD">CAD</option>
+                            <option value="AUD">AUD</option>
+                        </select>
                     </div>
                     <button type="submit" class="btn btn-primary">Add Client</button>
                 </form>
@@ -99,6 +112,19 @@
                     <div class="form-group">
                         <label>Purchase Date</label>
                         <input type="date" id="assetPurchaseDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Currency</label>
+                        <select id="assetCurrency">
+                            <option value="USD">USD</option>
+                            <option value="EUR">EUR</option>
+                            <option value="GBP">GBP</option>
+                            <option value="INR">INR</option>
+                            <option value="JPY">JPY</option>
+                            <option value="CHF">CHF</option>
+                            <option value="CAD">CAD</option>
+                            <option value="AUD">AUD</option>
+                        </select>
                     </div>
                     <button type="submit" class="btn btn-primary">Add Asset</button>
                 </form>

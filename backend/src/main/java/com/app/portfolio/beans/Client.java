@@ -32,6 +32,9 @@ public class Client {
 
     private String phone;
 
+    @Column(length = 3)
+    private String currency;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

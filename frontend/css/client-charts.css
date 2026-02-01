@@ -1,0 +1,304 @@
+/* Full-screen client charts - no sidebar */
+.client-charts-fullscreen {
+    display: block;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+}
+
+.client-charts-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem 1.5rem;
+    padding: 1rem 2rem;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.client-charts-header .back-link {
+    color: var(--primary-color, #2563eb);
+    text-decoration: none;
+    font-weight: 500;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    transition: background 0.2s, color 0.2s;
+}
+
+.client-charts-header .back-link:hover {
+    background: rgba(37, 99, 235, 0.08);
+    color: var(--primary-color, #1d4ed8);
+}
+
+.client-charts-header h1 {
+    flex: 1;
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-color, #1f2937);
+}
+
+.timeline-selector {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.timeline-label {
+    font-size: 0.875rem;
+    color: var(--text-light, #6b7280);
+    font-weight: 500;
+}
+
+.timeline-buttons {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.timeline-btn {
+    padding: 0.5rem 0.875rem;
+    border: 1px solid var(--border-color, #e5e7eb);
+    border-radius: 8px;
+    background: var(--white, #fff);
+    color: var(--text-color, #374151);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.timeline-btn:hover {
+    border-color: var(--primary-color, #2563eb);
+    color: var(--primary-color, #2563eb);
+    background: rgba(37, 99, 235, 0.04);
+}
+
+.timeline-btn.active {
+    background: var(--primary-color, #2563eb);
+    border-color: var(--primary-color, #2563eb);
+    color: white;
+}
+
+.client-charts-main {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.charts-section {
+    background: var(--white, #fff);
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    padding: 1.5rem 2rem;
+    margin-bottom: 2rem;
+}
+
+.charts-section h2 {
+    margin: 0 0 1rem 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-color, #1f2937);
+}
+
+.section-hint {
+    font-size: 0.875rem;
+    color: var(--text-light, #6b7280);
+    margin: -0.5rem 0 1rem 0;
+}
+
+.combined-section .chart-wrapper {
+    min-height: 320px;
+    margin-top: 1rem;
+}
+
+.chart-wrapper-large {
+    min-height: 400px;
+}
+
+.portfolio-value-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.portfolio-value-summary .value-card {
+    padding: 1rem 1.25rem;
+    background: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%);
+    border-radius: 10px;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.portfolio-value-summary .value-label {
+    display: block;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-light, #6b7280);
+    margin-bottom: 0.25rem;
+}
+
+.portfolio-value-summary .value-amount {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-color, #1f2937);
+}
+
+.portfolio-value-summary .value-meta {
+    font-size: 0.875rem;
+    color: var(--text-light, #6b7280);
+}
+
+.chart-message {
+    font-size: 0.875rem;
+    color: var(--text-light, #6b7280);
+    margin-top: 0.5rem;
+}
+
+/* Assets grid - clickable cards */
+.assets-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1rem;
+}
+
+.asset-card {
+    display: flex;
+    flex-direction: column;
+    padding: 1.25rem;
+    border: 2px solid var(--border-color, #e5e7eb);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--white, #fff);
+}
+
+.asset-card:hover {
+    border-color: var(--primary-color, #2563eb);
+    box-shadow: 0 8px 24px rgba(37, 99, 235, 0.12);
+}
+
+.asset-card .asset-symbol {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--primary-color, #2563eb);
+    margin-bottom: 0.25rem;
+}
+
+.asset-card .asset-name {
+    font-size: 0.875rem;
+    color: var(--text-light, #6b7280);
+    margin-bottom: 0.5rem;
+}
+
+.asset-card .asset-meta {
+    font-size: 0.8125rem;
+    color: var(--text-light, #6b7280);
+    margin-top: auto;
+}
+
+.asset-card .asset-value {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-color, #1f2937);
+    margin-top: 0.5rem;
+}
+
+.asset-card .asset-pnl {
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-top: 0.25rem;
+}
+
+.asset-card .asset-pnl.positive {
+    color: var(--success-color, #059669);
+}
+
+.asset-card .asset-pnl.negative {
+    color: var(--danger-color, #dc2626);
+}
+
+/* Hidden asset chart section */
+.asset-detail-section {
+    border: 2px solid var(--primary-color, #2563eb);
+    background: linear-gradient(180deg, #fafbff 0%, var(--white, #fff) 100%);
+}
+
+.asset-detail-section.hidden {
+    display: none !important;
+}
+
+.asset-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.asset-detail-header h2 {
+    margin: 0;
+}
+
+.btn-close-chart {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 8px;
+    background: var(--bg-color, #f3f4f6);
+    color: var(--text-color, #374151);
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+
+.btn-close-chart:hover {
+    background: var(--danger-color, #dc2626);
+    color: white;
+}
+
+.error-banner {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.75rem 1.5rem;
+    background: var(--danger-color, #dc2626);
+    color: white;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+}
+
+.error-banner.hidden {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .client-charts-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .client-charts-header h1 {
+        text-align: center;
+    }
+
+    .timeline-selector {
+        justify-content: center;
+    }
+
+    .timeline-buttons {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .client-charts-main {
+        padding: 1rem;
+    }
+}

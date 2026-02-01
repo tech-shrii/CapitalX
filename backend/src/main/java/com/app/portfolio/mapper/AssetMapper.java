@@ -21,6 +21,9 @@ public class AssetMapper {
         existing.setQuantity(request.getQuantity());
         existing.setBuyingRate(request.getBuyingRate());
         existing.setPurchaseDate(request.getPurchaseDate());
+        if (request.getCurrency() != null) {
+            existing.setCurrency(request.getCurrency());
+        }
         return existing;
     }
 
@@ -34,6 +37,7 @@ public class AssetMapper {
                 .quantity(entity.getQuantity())
                 .buyingRate(entity.getBuyingRate())
                 .purchaseDate(entity.getPurchaseDate())
+                .currency(entity.getCurrency())
                 .currentPrice(currentPrice)
                 .profitLoss(profitLoss)
                 .profitLossPercent(profitLossPercent)

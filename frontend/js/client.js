@@ -43,10 +43,13 @@ function displayClients(clients) {
     }
 
     container.innerHTML = clients.map(client => `
-        <div class="client-card" onclick="viewClientDetail(${client.id})">
+        <div class="client-card" onclick="viewClientCharts(${client.id})">
             <h3>${client.name}</h3>
             <p>${client.email}</p>
             ${client.phone ? `<p>${client.phone}</p>` : ''}
+            <div style="margin-top: 10px;">
+                <button class="btn btn-secondary" onclick="event.stopPropagation(); viewClientDetail(${client.id})" style="font-size: 12px; padding: 5px 10px;">View Details</button>
+            </div>
         </div>
     `).join('');
 }
@@ -88,6 +91,7 @@ function displayClientDetail(client, assets) {
                 <tr>
                     <th>Asset Name</th>
                     <th>Category</th>
+                    <th>Currency</th>
                     <th>Quantity</th>
                     <th>Buying Rate</th>
                     <th>Current Price</th>
@@ -97,15 +101,19 @@ function displayClientDetail(client, assets) {
                 </tr>
             </thead>
             <tbody>
-                ${assets.map(asset => `
+                ${assets.map(asset => {
+                    const curr = asset.currency || 'USD';
+                    const sym = curr === 'USD' ? '$' : curr + ' ';
+                    return `
                     <tr>
                         <td>${asset.name}</td>
                         <td>${asset.category}</td>
+                        <td>${curr}</td>
                         <td>${asset.quantity}</td>
-                        <td>₹${asset.buyingRate}</td>
-                        <td>₹${asset.currentPrice || asset.buyingRate}</td>
+                        <td>${sym}${asset.buyingRate}</td>
+                        <td>${sym}${(asset.currentPrice != null ? asset.currentPrice : asset.buyingRate)}</td>
                         <td class="${asset.profitLoss >= 0 ? 'positive' : 'negative'}">
-                            ₹${(asset.profitLoss || 0).toFixed(2)}
+                            ${sym}${(asset.profitLoss || 0).toFixed(2)}
                         </td>
                         <td class="${asset.profitLossPercent >= 0 ? 'positive' : 'negative'}">
                             ${(asset.profitLossPercent || 0).toFixed(2)}%
@@ -115,7 +123,7 @@ function displayClientDetail(client, assets) {
                             <button onclick="deleteAsset(${asset.id})" class="btn btn-secondary">Delete</button>
                         </td>
                     </tr>
-                `).join('')}
+                `; }).join('')}
             </tbody>
         </table>
     `;
@@ -141,6 +149,7 @@ async function handleAddClient(e) {
         name: document.getElementById('clientName').value,
         email: document.getElementById('clientEmail').value,
         phone: document.getElementById('clientPhone').value,
+        currency: document.getElementById('clientCurrency').value || null,
     };
 
     try {
@@ -179,3 +188,11 @@ async function deleteAsset(assetId) {
         alert('Error deleting asset: ' + error.message);
     }
 }
+
+function viewClientCharts(clientId) {
+    // Navigate to full-screen client charts page
+    window.location.href = `client-charts.html?clientId=${clientId}`;
+}
+
+// Make function globally available
+window.viewClientCharts = viewClientCharts;

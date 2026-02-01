@@ -1,2 +1,4 @@
+backend/target/classes/application.properties
 backend/src/main/resources/application.properties
 frontend/node_modules
+pricing-service/venv

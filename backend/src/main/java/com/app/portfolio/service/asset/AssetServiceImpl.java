@@ -2,6 +2,7 @@ package com.app.portfolio.service.asset;
 
 import com.app.portfolio.beans.Asset;
 import com.app.portfolio.beans.Client;
+import com.app.portfolio.beans.User;
 import com.app.portfolio.dto.asset.AssetRequest;
 import com.app.portfolio.dto.asset.AssetResponse;
 import com.app.portfolio.dto.asset.PnlResponse;
@@ -9,6 +10,7 @@ import com.app.portfolio.exceptions.ResourceNotFoundException;
 import com.app.portfolio.mapper.AssetMapper;
 import com.app.portfolio.repository.AssetRepository;
 import com.app.portfolio.repository.ClientRepository;
+import com.app.portfolio.repository.UserRepository;
 import com.app.portfolio.service.pricing.PricingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -16,7 +18,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -25,6 +31,7 @@ public class AssetServiceImpl implements AssetService {
 
     private final AssetRepository assetRepository;
     private final ClientRepository clientRepository;
+    private final UserRepository userRepository;
     private final AssetMapper assetMapper;
     private final PricingService pricingService;
 
@@ -36,6 +43,24 @@ public class AssetServiceImpl implements AssetService {
         }
         return assetRepository.findByClientIdOrderByPurchaseDateDesc(clientId)
                 .stream()
+                .map(asset -> {
+                    BigDecimal currentPrice = pricingService.getCurrentPrice(asset.getId());
+                    BigDecimal profitLoss = calculateProfitLoss(asset, currentPrice);
+                    BigDecimal profitLossPercent = calculateProfitLossPercent(asset, currentPrice);
+                    return assetMapper.toResponse(asset, currentPrice, profitLoss, profitLossPercent);
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<AssetResponse> getAllAssets(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
+        
+        List<Client> clients = user.getClients();
+        return clients.stream()
+                .flatMap(client -> assetRepository.findByClientIdOrderByPurchaseDateDesc(client.getId()).stream())
                 .map(asset -> {
                     BigDecimal currentPrice = pricingService.getCurrentPrice(asset.getId());
                     BigDecimal profitLoss = calculateProfitLoss(asset, currentPrice);
@@ -162,5 +187,94 @@ public class AssetServiceImpl implements AssetService {
         return invested.compareTo(BigDecimal.ZERO) > 0
                 ? profitLoss.divide(invested, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
                 : BigDecimal.ZERO;
+    }
+
+    @Override
+    @Transactional
+    public int importAssets(List<Map<String, Object>> assets, Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
+
+        // Get or create default client for user
+        Client defaultClient = user.getClients().stream()
+                .findFirst()
+                .orElseGet(() -> {
+                    Client newClient = Client.builder()
+                            .name("Default Client")
+                            .email("default@portfolio.com")
+                            .user(user)
+                            .createdAt(Instant.now())
+                            .build();
+                    return clientRepository.save(newClient);
+                });
+
+        int importedCount = 0;
+        for (Map<String, Object> assetData : assets) {
+            try {
+                String categoryStr = assetData.getOrDefault("assetType", "STOCK").toString().toUpperCase();
+                Asset.AssetCategory category = Asset.AssetCategory.valueOf(categoryStr);
+                
+                // Parse purchase date - try LocalDate first, then Instant conversion
+                LocalDate purchaseDate;
+                try {
+                    String dateStr = assetData.getOrDefault("purchaseDate", LocalDate.now().toString()).toString();
+                    try {
+                        // Try parsing as LocalDate (ISO format: YYYY-MM-DD)
+                        purchaseDate = LocalDate.parse(dateStr);
+                    } catch (Exception e) {
+                        // If that fails, try parsing as Instant and convert to LocalDate
+                        Instant instant = Instant.parse(dateStr);
+                        purchaseDate = instant.atZone(ZoneId.systemDefault()).toLocalDate();
+                    }
+                } catch (Exception e) {
+                    // Default to today if parsing fails
+                    purchaseDate = LocalDate.now();
+                }
+                
+                String currency = assetData.containsKey("currency")
+                        ? assetData.get("currency").toString().toUpperCase().substring(0, Math.min(3, assetData.get("currency").toString().length()))
+                        : "USD";
+                Asset asset = Asset.builder()
+                        .symbol(assetData.get("symbol").toString().toUpperCase())
+                        .quantity(new BigDecimal(assetData.getOrDefault("quantity", "0").toString()))
+                        .buyingRate(new BigDecimal(assetData.getOrDefault("buyingRate", "0").toString()))
+                        .category(category)
+                        .name(assetData.get("symbol").toString())
+                        .purchaseDate(purchaseDate)
+                        .currency(currency)
+                        .client(defaultClient)
+                        .createdAt(Instant.now())
+                        .build();
+                assetRepository.save(asset);
+                importedCount++;
+            } catch (Exception e) {
+                // Skip invalid assets
+                continue;
+            }
+        }
+
+        return importedCount;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public String exportAssetsAsCSV(Long userId) {
+        List<AssetResponse> assets = getAllAssets(userId);
+        
+        StringBuilder csv = new StringBuilder();
+        csv.append("symbol,quantity,buyingRate,assetType,purchaseDate,currency\n");
+
+        for (AssetResponse asset : assets) {
+            csv.append(String.format("%s,%s,%s,%s,%s,%s\n",
+                    asset.getSymbol(),
+                    asset.getQuantity(),
+                    asset.getBuyingRate(),
+                    asset.getCategory(),
+                    asset.getPurchaseDate(),
+                    asset.getCurrency() != null ? asset.getCurrency() : "USD"
+            ));
+        }
+
+        return csv.toString();
     }
 }

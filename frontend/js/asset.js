@@ -44,13 +44,14 @@ async function handleAddAsset(e) {
         quantity: parseFloat(document.getElementById('assetQuantity').value),
         buyingRate: parseFloat(document.getElementById('assetBuyingRate').value),
         purchaseDate: document.getElementById('assetPurchaseDate').value,
+        currency: document.getElementById('assetCurrency')?.value || 'USD',
     };
 
     try {
-        await apiCall(`/clients/${clientId}/assets`, 'POST', assetData);
+        await apiCall(`/clients/${currentClientId}/assets`, 'POST', assetData);
         closeAddAssetModal();
-        if (typeof viewClientDetail === 'function' && clientId) {
-            viewClientDetail(clientId);
+        if (typeof viewClientDetail === 'function' && currentClientId) {
+            viewClientDetail(currentClientId);
         } else {
             // Reload page or refresh client list
             window.location.reload();

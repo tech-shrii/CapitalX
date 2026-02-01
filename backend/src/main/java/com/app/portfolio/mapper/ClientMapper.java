@@ -15,6 +15,7 @@ public class ClientMapper {
         existing.setName(request.getName());
         existing.setEmail(request.getEmail());
         existing.setPhone(request.getPhone());
+        existing.setCurrency(request.getCurrency());
         return existing;
     }
 
@@ -24,6 +25,7 @@ public class ClientMapper {
                 .name(entity.getName())
                 .email(entity.getEmail())
                 .phone(entity.getPhone())
+                .currency(entity.getCurrency())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();

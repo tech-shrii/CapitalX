@@ -18,4 +18,7 @@ public class ClientRequest {
 
     @Size(max = 20)
     private String phone;
+
+    @Size(max = 3)
+    private String currency;
 }

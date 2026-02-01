@@ -20,6 +20,7 @@ public class AssetResponse {
     private BigDecimal quantity;
     private BigDecimal buyingRate;
     private LocalDate purchaseDate;
+    private String currency;
     private BigDecimal currentPrice;
     private BigDecimal profitLoss;
     private BigDecimal profitLossPercent;

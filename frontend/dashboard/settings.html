@@ -60,12 +60,12 @@
         <div class="section">
             <h2>Data Management</h2>
             <div class="form-group">
-                <label>Import Excel</label>
-                <input type="file" id="excelFile" accept=".xlsx,.xls">
-                <button onclick="importExcel()" class="btn btn-primary">Import</button>
+                <label>Import CSV File</label>
+                <input type="file" id="csvFile" accept=".csv" required>
+                <button onclick="importCSV()" class="btn btn-primary">Import</button>
             </div>
             <div class="form-group">
-                <button onclick="exportExcel()" class="btn btn-primary">Export to Excel</button>
+                <button onclick="exportCSV()" class="btn btn-primary">Export to CSV</button>
             </div>
             <div id="dataMessage" class="message"></div>
         </div>

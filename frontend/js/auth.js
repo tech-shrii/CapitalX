@@ -84,7 +84,7 @@ async function handleOtpVerification(e) {
         localStorage.setItem('userEmail', response.email);
 
         if (isSignup) {
-            window.location.href = '../dashboard/settings.html';
+            window.location.href = '../dashboard/import-data.html';
         } else {
             window.location.href = '../dashboard/home.html';
         }

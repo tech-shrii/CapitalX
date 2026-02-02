@@ -32,8 +32,30 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(409).body(ex.getMessage());
     }
 
+    // File Ingestion Exceptions
+    @ExceptionHandler(InvalidFileFormatException.class)
+    public ResponseEntity<String> handleInvalidFileFormatException(InvalidFileFormatException ex) {
+        return ResponseEntity.status(400).body("Invalid file format: " + ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidCSVException.class)
+    public ResponseEntity<String> handleInvalidCSVException(InvalidCSVException ex) {
+        return ResponseEntity.status(400).body("Invalid CSV content: " + ex.getMessage());
+    }
+
+    @ExceptionHandler(AssetResolutionException.class)
+    public ResponseEntity<String> handleAssetResolutionException(AssetResolutionException ex) {
+        return ResponseEntity.status(400).body("Asset resolution failed: " + ex.getMessage());
+    }
+
+    @ExceptionHandler(PortfolioIngestionException.class)
+    public ResponseEntity<String> handlePortfolioIngestionException(PortfolioIngestionException ex) {
+        return ResponseEntity.status(400).body("Portfolio ingestion failed: " + ex.getMessage());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<String> handleGlobalException(Exception ex) {
         return ResponseEntity.status(500).body("An unexpected error occurred: " + ex.getMessage());
     }
 }
+

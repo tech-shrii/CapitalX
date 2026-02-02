@@ -4,13 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign Up - Portfolio Dashboard</title>
-    <link rel="stylesheet" href="../css/main.css">
-    <link rel="stylesheet" href="../css/auth.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/new-style.css">
 </head>
 <body>
     <div class="auth-container">
         <div class="auth-card">
-            <h1>Create Account</h1>
+            <div class="auth-header">
+                <a href="../index.html" class="back-link">&larr;</a>
+                <h1 class="title">Create Account</h1>
+            </div>
             <form id="signupForm">
                 <div class="form-group">
                     <label for="name">Full Name</label>
@@ -31,7 +34,7 @@
                 <button type="submit" class="btn btn-primary btn-block">Sign Up</button>
             </form>
             <div id="otpSection" class="otp-section hidden">
-                <h2>Verify Email</h2>
+                <h2 class="title">Verify Email</h2>
                 <p>We've sent an OTP to your email. Please enter it below.</p>
                 <form id="otpForm">
                     <div class="form-group">
@@ -43,8 +46,10 @@
             </div>
             <div class="auth-links">
                 <a href="login.html">Already have an account? Login</a>
+                <br>
+                <a href="../index.html">Back to Home</a>
             </div>
-            <div id="errorMessage" class="error-message"></div>
+            <div id="message" class="message hidden"></div>
         </div>
     </div>
     <script src="../js/api.js"></script>

@@ -72,6 +72,6 @@ public class Asset {
     }
 
     public enum AssetCategory {
-        STOCK, FD, BOND, CRYPTO, METAL, MUTUAL_FUND
+        STOCK, MUTUAL_FUND, BOND, CRYPTO, COMMODITY, FOREX
     }
 }

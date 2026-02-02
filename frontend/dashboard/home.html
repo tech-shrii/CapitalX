@@ -1,67 +1,116 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Portfolio Manager</title>
-    <link rel="stylesheet" href="../css/main.css">
-    <link rel="stylesheet" href="../css/dashboard.css">
+<meta charset="UTF-8">
+<title>Dashboard - Portfolio Manager</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- Google Font -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/new-style.css">
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 </head>
+
 <body>
-    <nav class="sidebar">
-        <div class="sidebar-header">
-            <h2>Portfolio Manager</h2>
-        </div>
-        <ul class="sidebar-menu">
-            <li><a href="home.html" class="active">Dashboard</a></li>
-            <li><a href="charts.html">Charts</a></li>
-            <li><a href="client-detail.html">Clients</a></li>
-            <li><a href="news.html">News</a></li>
-            <li><a href="statements.html">Statements</a></li>
-            <li><a href="settings.html">Settings</a></li>
-            <li><a href="#" id="logoutBtn">Logout</a></li>
-        </ul>
-    </nav>
+<div class="container">
 
-    <main class="main-content">
-        <header class="top-bar">
-            <h1>Dashboard</h1>
-            <div class="user-info">
-                <span id="userName"></span>
-            </div>
-        </header>
+<!-- HEADER -->
+<div class="header">
+  <div>
+    <div class="title">Asset Management Portfolio</div>
+    <div class="email" id="userEmail"></div>
+  </div>
+  <div class="header-actions">
+    <button id="addClientBtnHeader" class="btn btn-primary">+ Add Client</button>
+    <div class="user-select">
+      Managing:
+      <select id="clientSwitcher">
+        <option>Main Portfolio</option>
+      </select>
+    </div>
+  </div>
+</div>
 
-        <div class="dashboard-grid">
-            <div class="summary-card">
-                <h3>Total Clients</h3>
-                <p class="summary-value" id="totalClients">0</p>
-            </div>
-            <div class="summary-card">
-                <h3>Total Assets</h3>
-                <p class="summary-value" id="totalAssets">0</p>
-            </div>
-            <div class="summary-card">
-                <h3>Total Invested</h3>
-                <p class="summary-value" id="totalInvested">₹0</p>
-            </div>
-            <div class="summary-card">
-                <h3>Current Value</h3>
-                <p class="summary-value" id="currentValue">₹0</p>
-            </div>
-            <div class="summary-card profit-loss">
-                <h3>Total P&L</h3>
-                <p class="summary-value" id="totalPnL">₹0</p>
-                <p class="summary-percent" id="totalPnLPercent">0%</p>
-            </div>
-        </div>
+<!-- NAV -->
+<div class="nav">
+  <a href="#" class="active" data-tab="dashboard">Dashboard</a>
+  <a href="#" data-tab="stock">Stock</a>
+  <a href="#" data-tab="mutual_fund">Mutual Fund</a>
+  <a href="#" data-tab="bond">Bond</a>
+  <a href="#" data-tab="crypto">Crypto</a>
+  <a href="#" data-tab="commodity">Commodity</a>
+  <a href="#" data-tab="forex">Forex</a>
+  <a href="#" data-tab="news">News</a>
+  <a href="#" data-tab="statement">Statement</a>
+  <a href="#" data-tab="setting">Setting</a>
+</div>
 
-        <div class="section">
-            <h2>Recent Clients</h2>
-            <div id="recentClients" class="clients-list"></div>
-        </div>
-    </main>
+<div id="tab-content">
+    <!-- Dashboard content will be loaded here -->
+</div>
 
-    <script src="../js/api.js"></script>
-    <script src="../js/dashboard.js"></script>
+<div id="editAssetModal" class="modal hidden">
+    <div class="modal-content">
+        <span class="close" id="closeEditAssetModal">&times;</span>
+        <h2>Edit Asset</h2>
+        <form id="editAssetForm">
+            <input type="hidden" id="editAssetId">
+            <div class="form-group">
+                <label>Asset Name</label>
+                <input type="text" id="editAssetName" required class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Category</label>
+                <select id="editAssetCategory" required class="form-control">
+                    <option value="STOCK">Stock</option>
+                    <option value="MUTUAL_FUND">Mutual Fund</option>
+                    <option value="BOND">Bond</option>
+                    <option value="CRYPTO">Crypto</option>
+                    <option value="COMMODITY">Commodity</option>
+                    <option value="FOREX">Forex</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Symbol</label>
+                <input type="text" id="editAssetSymbol" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Quantity</label>
+                <input type="number" id="editAssetQuantity" step="0.0001" required class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Buying Rate</label>
+                <input type="number" id="editAssetBuyingRate" step="0.01" required class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Purchase Date</label>
+                <input type="date" id="editAssetPurchaseDate" required class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Currency</label>
+                <select id="editAssetCurrency" class="form-control">
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                    <option value="GBP">GBP</option>
+                    <option value="INR">INR</option>
+                    <option value="JPY">JPY</option>
+                    <option value="CHF">CHF</option>
+                    <option value="CAD">CAD</option>
+                    <option value="AUD">AUD</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Update Asset</button>
+        </form>
+    </div>
+</div>
+
+
+</div>
+
+<script src="../js/api.js"></script>
+<script src="../js/dashboard.js"></script>
 </body>
 </html>

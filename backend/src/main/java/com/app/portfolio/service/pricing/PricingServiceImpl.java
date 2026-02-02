@@ -34,7 +34,7 @@ public class PricingServiceImpl implements PricingService {
 
     // Cache for external prices with timestamp
     private final Map<String, CachedPrice> priceCache = new ConcurrentHashMap<>();
-    private final long PRICE_CACHE_TTL = 10000; // 10 seconds
+    private static final long PRICE_CACHE_TTL = 60000; // 60 seconds
 
     @Override
     @Transactional(readOnly = true)
@@ -57,7 +57,7 @@ public class PricingServiceImpl implements PricingService {
     }
 
     @Override
-    @Scheduled(initialDelay = 30000, fixedRate = 10000) // Initial delay 30s, then every 10s
+    @Scheduled(initialDelay = 30000, fixedRate = 60000) // Initial delay 30s, then every 1m
     @Transactional
     public void fetchAndUpdatePrices() {
         try {
@@ -261,7 +261,7 @@ public class PricingServiceImpl implements PricingService {
         }
 
         boolean isExpired() {
-            return System.currentTimeMillis() - timestamp > 10000; // 10 seconds
+            return System.currentTimeMillis() - timestamp > PRICE_CACHE_TTL; // 60 seconds
         }
     }
 }

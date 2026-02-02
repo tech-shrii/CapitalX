@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Asset Management Portfolio</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- Google Font -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+*{
+  box-sizing:border-box;
+  margin:0;
+  padding:0;
+  font-family:Inter,system-ui,Arial;
+}
+
+body{
+  background:#f5f7fb;
+  color:#0f172a;
+}
+
+.container{
+  max-width:1300px;
+  margin:auto;
+  padding:24px;
+}
+
+/* HEADER */
+.header{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  margin-bottom:18px;
+}
+
+.title{
+  font-size:26px;
+  font-weight:800;
+}
+
+.email{
+  color:#64748b;
+  margin-top:4px;
+}
+
+.user-select select{
+  padding:8px 14px;
+  border-radius:10px;
+  border:1px solid #dbe3f0;
+}
+
+/* NAV */
+.nav{
+  display:flex;
+  gap:26px;
+  border-bottom:1px solid #e5eaf3;
+  margin-bottom:22px;
+}
+
+.nav a{
+  padding:12px 0;
+  text-decoration:none;
+  color:#475569;
+  font-weight:500;
+}
+
+.nav a.active{
+  color:#2563eb;
+  border-bottom:3px solid #2563eb;
+}
+
+/* CARDS */
+.grid4{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:18px;
+  margin-bottom:24px;
+}
+
+.card{
+  background:#fff;
+  padding:22px;
+  border-radius:14px;
+  box-shadow:0 4px 16px rgba(0,0,0,.04);
+}
+
+.kpi-title{
+  color:#64748b;
+  font-size:14px;
+}
+
+.kpi-value{
+  font-size:26px;
+  font-weight:800;
+  margin:8px 0;
+}
+
+.positive{color:#16a34a;}
+.negative{color:#dc2626;}
+
+/* CHART AREA */
+.grid2{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:18px;
+  margin-bottom:24px;
+}
+
+/* TABLE */
+table{
+  width:100%;
+  border-collapse:collapse;
+}
+
+th{
+  text-align:left;
+  font-size:14px;
+  color:#64748b;
+  padding-bottom:12px;
+}
+
+td{
+  padding:14px 0;
+  border-top:1px solid #eef2f7;
+}
+
+.badge{
+  padding:4px 10px;
+  border-radius:8px;
+  font-size:12px;
+  font-weight:600;
+}
+
+.badge-blue{background:#e0ecff;color:#2563eb;}
+.badge-green{background:#dcfce7;color:#16a34a;}
+.badge-red{background:#fee2e2;color:#dc2626;}
+.badge-purple{background:#ede9fe;color:#7c3aed;}
+
+.right{
+  text-align:right;
+}
+
+/* RESPONSIVE */
+@media(max-width:1000px){
+  .grid4{grid-template-columns:repeat(2,1fr);}
+  .grid2{grid-template-columns:1fr;}
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<!-- HEADER -->
+<div class="header">
+  <div>
+    <div class="title">Asset Management Portfolio</div>
+    <div class="email">john.mitchell@email.com</div>
+  </div>
+  <div class="user-select">
+    Managing:
+    <select>
+      <option>John Mitchell</option>
+    </select>
+  </div>
+</div>
+
+<!-- NAV -->
+<div class="nav">
+  <a class="active">Dashboard</a>
+  <a>Stocks</a>
+  <a>F/O</a>
+  <a>Mutual Funds</a>
+  <a>Forex</a>
+  <a>Cryptocurrency</a>
+</div>
+
+<!-- KPI -->
+<div class="grid4">
+  <div class="card">
+    <div class="kpi-title">Total Portfolio Value</div>
+    <div class="kpi-value">$128,500</div>
+    <div class="positive">↗ +22.38% vs last month</div>
+  </div>
+
+  <div class="card">
+    <div class="kpi-title">Total Returns</div>
+    <div class="kpi-value positive">+$23,500</div>
+    <div>22.38% overall return</div>
+  </div>
+
+  <div class="card">
+    <div class="kpi-title">Total Investment</div>
+    <div class="kpi-value">$105,000</div>
+    <div>Across 5 asset categories</div>
+  </div>
+
+  <div class="card">
+    <div class="kpi-title">Best Performer</div>
+    <div class="kpi-value">Tech Growth Fund</div>
+    <div class="positive">+24.5% returns</div>
+  </div>
+</div>
+
+<!-- CHARTS -->
+<div class="grid2">
+
+<div class="card">
+<h3>Asset Allocation</h3>
+<canvas id="pie"></canvas>
+</div>
+
+<div class="card">
+<h3>Portfolio Performance (6 Months)</h3>
+<canvas id="line"></canvas>
+</div>
+
+</div>
+
+<!-- TOP ASSETS -->
+<div class="card">
+<h3>Top Performing Assets</h3>
+<br>
+<table>
+<tr>
+<th>Asset Name</th><th>Type</th><th class="right">Current Value</th><th class="right">Returns</th>
+</tr>
+<tr>
+<td>Tech Growth Fund</td><td>Mutual Fund</td>
+<td class="right">$45,000</td>
+<td class="right positive">+24.5%</td>
+</tr>
+<tr>
+<td>AAPL</td><td>Stock</td>
+<td class="right">$32,000</td>
+<td class="right positive">+18.3%</td>
+</tr>
+<tr>
+<td>Bitcoin</td><td>Crypto</td>
+<td class="right">$28,000</td>
+<td class="right positive">+15.7%</td>
+</tr>
+<tr>
+<td>NIFTY Future</td><td>F/O</td>
+<td class="right">$22,000</td>
+<td class="right positive">+12.4%</td>
+</tr>
+</table>
+</div>
+
+<br>
+
+<!-- CATEGORY BAR -->
+<div class="card">
+<h3>Asset Category Breakdown</h3>
+<canvas id="bar"></canvas>
+</div>
+
+</div>
+
+<script>
+new Chart(pie,{
+type:'pie',
+data:{
+labels:['Stocks','F/O','Mutual Funds','Forex','Crypto'],
+datasets:[{
+data:[35,17,21,18,9],
+backgroundColor:['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444']
+}]
+}
+});
+
+new Chart(line,{
+type:'line',
+data:{
+labels:['Sep','Oct','Nov','Dec','Jan','Feb'],
+datasets:[{
+label:'Portfolio',
+data:[95000,103000,99000,115000,121000,128500],
+borderColor:'#2563eb',
+tension:.4,
+fill:false
+}]
+}
+});
+
+new Chart(bar,{
+type:'bar',
+data:{
+labels:['Stocks','F/O','Mutual Funds','Forex','Crypto'],
+datasets:[{
+data:[45000,22000,35000,15000,11500],
+backgroundColor:'#3b82f6'
+}]
+}
+});
+</script>
+
+</body>
+</html>

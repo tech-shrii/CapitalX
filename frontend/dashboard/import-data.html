@@ -3,29 +3,107 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Import Data - Portfolio Manager</title>
+    <title>Setup Your Account - Portfolio Manager</title>
     <link rel="stylesheet" href="../css/main.css">
     <link rel="stylesheet" href="../css/dashboard.css">
+    <style>
+        .stepper { display: flex; justify-content: space-around; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid #eee; }
+        .step { text-align: center; color: #aaa; }
+        .step.active { color: #3b82f6; font-weight: bold; }
+        .step .step-number { display: inline-block; width: 30px; height: 30px; line-height: 30px; border-radius: 50%; background-color: #eee; color: #aaa; margin-bottom: 0.5rem; }
+        .step.active .step-number { background-color: #3b82f6; color: white; }
+        .hidden { display: none; }
+        .main-content { max-width: 800px; margin: 40px auto; padding: 20px; }
+        .top-bar { background: none; box-shadow: none; padding: 0; }
+        .top-bar h1 { text-align: center; font-size: 2rem; margin-bottom: 2rem; }
+        .section { background: #fff; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .form-actions { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 2rem; }
+    </style>
 </head>
 <body>
     <main class="main-content">
         <header class="top-bar">
-            <h1>Import Your Data</h1>
+            <h1>Setup Your Account</h1>
         </header>
 
-        <div class="section">
-            <h2>Data Management</h2>
-            <div class="form-group">
-                <label>Import CSV File</label>
-                <input type="file" id="csvFile" accept=".csv" required>
-                <button onclick="importCSV()" class="btn btn-primary">Import</button>
+        <div class="stepper">
+            <div id="step-1-indicator" class="step active">
+                <div class="step-number">1</div>
+                <div>Add Client</div>
             </div>
-            <div id="dataMessage" class="message"></div>
+            <div id="step-2-indicator" class="step">
+                <div class="step-number">2</div>
+                <div>Import Data</div>
+            </div>
+            <div id="step-3-indicator" class="step">
+                <div class="step-number">3</div>
+                <div>Finished</div>
+            </div>
         </div>
 
-        <div class="form-group" style="margin-top: 30px;">
-            <button onclick="skipImport()" class="btn btn-secondary">Skip for Now</button>
+        <!-- Step 1: Add Client -->
+        <div id="step-1" class="section">
+            <h2>Add Your First Client</h2>
+            <p>Start by adding a client profile. You can add your own portfolio as the first client.</p>
+            <form id="addClientForm">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="clientName" required placeholder="e.g., My Personal Portfolio, John Doe">
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="clientEmail" required placeholder="email@example.com">
+                </div>
+                <div class="form-group">
+                    <label>Phone</label>
+                    <input type="tel" id="clientPhone" placeholder="+1 234 567 8900">
+                </div>
+                <div class="form-group">
+                    <label>Default Currency</label>
+                    <select id="clientCurrency" class="form-control">
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                        <option value="GBP">GBP</option>
+                        <option value="INR">INR</option>
+                        <option value="JPY">JPY</option>
+                        <option value="CHF">CHF</option>
+                        <option value="CAD">CAD</option>
+                        <option value="AUD">AUD</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" onclick="skipToDashboard()" class="btn btn-secondary">Skip for Now</button>
+                    <button type="submit" class="btn btn-primary">Save and Continue</button>
+                </div>
+            </form>
         </div>
+
+        <!-- Step 2: Import CSV -->
+        <div id="step-2" class="section hidden">
+            <h2>Import Data for <span id="csvClientName"></span></h2>
+            <p>Upload a CSV file with your asset data. You can also skip this step and add assets manually later.</p>
+            <div class="form-group">
+                <label>CSV File</label>
+                <input type="file" id="csvFile" accept=".csv">
+                <p class="form-text">CSV must contain at least 'symbol' and 'quantity' columns. Optional: 'buyingRate', 'category', 'purchaseDate', 'currency'.</p>
+            </div>
+            <div id="dataMessage" class="message"></div>
+            <div class="form-actions">
+                 <button type="button" onclick="goToStep(3)" class="btn btn-secondary">Skip Import</button>
+                <button type="button" onclick="importCSV()" class="btn btn-primary">Import and Continue</button>
+            </div>
+        </div>
+
+        <!-- Step 3: Finished / Add another -->
+        <div id="step-3" class="section hidden">
+            <h2>Client Added!</h2>
+            <p>What would you like to do next?</p>
+            <div class="form-actions" style="justify-content: center;">
+                <button type="button" onclick="goToStep(1)" class="btn btn-secondary">Add Another Client</button>
+                <button type="button" onclick="skipToDashboard()" class="btn btn-primary">Finish and Go to Dashboard</button>
+            </div>
+        </div>
+
     </main>
 
     <script src="../js/api.js"></script>

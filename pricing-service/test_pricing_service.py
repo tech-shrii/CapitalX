@@ -246,9 +246,50 @@ def test_portfolio_chart():
         print(f"✗ Error: {e}")
         return False
 
+def test_bulk_charts():
+    """Test bulk charts endpoint"""
+    print_section("8. Bulk Charts")
+    try:
+        request_body = {
+            "symbols": ["AAPL", "MSFT", "GOOGL"],
+            "period": "1mo",
+            "interval": "1d"
+        }
+        response = requests.post(
+            f"{BASE_URL}/api/charts/bulk",
+            json=request_body,
+            headers={"Content-Type": "application/json"},
+            timeout=TIMEOUT
+        )
+        print(f"Status: {response.status_code}")
+        if response.status_code == 200:
+            data = response.json()
+            charts_data = data.get("data", {})
+            print(f"✓ Bulk chart fetch successful")
+            print(f"  Requested: {len(request_body['symbols'])} symbols")
+            print(f"  Received: {len(charts_data)} charts")
+            for symbol in request_body['symbols']:
+                symbol_upper = symbol.upper()
+                if symbol_upper in charts_data:
+                    chart_info = charts_data[symbol_upper]
+                    if "error" in chart_info:
+                        print(f"  ✗ {symbol_upper}: {chart_info['error']}")
+                    else:
+                        print(f"  ✓ {symbol_upper}: {len(chart_info.get('data', []))} data points")
+                else:
+                    print(f"  ✗ {symbol_upper}: Not found")
+            return True
+        else:
+            print(f"✗ Failed: {response.status_code}")
+            print(f"  Response: {response.text}")
+            return False
+    except Exception as e:
+        print(f"✗ Error: {e}")
+        return False
+
 def test_international_symbols():
     """Test international symbols"""
-    print_section("8. International Symbols")
+    print_section("9. International Symbols")
     try:
         symbols = ["RELIANCE.NS", "HSBA.L", "7203.T"]  # India, UK, Japan
         response = requests.post(
@@ -280,6 +321,25 @@ def test_international_symbols():
         print(f"✗ Error: {e}")
         return False
 
+def test_clear_cache():
+    """Test clear cache endpoint"""
+    print_section("10. Clear Cache")
+    try:
+        response = requests.post(f"{BASE_URL}/api/cache/clear", timeout=TIMEOUT)
+        print(f"Status: {response.status_code}")
+        if response.status_code == 200:
+            data = response.json()
+            print(f"✓ Cache cleared successfully")
+            print(f"  Status: {data.get('status')}")
+            return True
+        else:
+            print(f"✗ Failed: {response.status_code}")
+            print(f"  Response: {response.text}")
+            return False
+    except Exception as e:
+        print(f"✗ Error: {e}")
+        return False
+
 def main():
     """Run all tests"""
     print("\n" + "="*60)
@@ -301,7 +361,9 @@ def main():
         results.append(("Portfolio Value", test_portfolio_value()))
         results.append(("Chart Data", test_chart_data()))
         results.append(("Portfolio Chart", test_portfolio_chart()))
+        results.append(("Bulk Charts", test_bulk_charts()))
         results.append(("International Symbols", test_international_symbols()))
+        results.append(("Clear Cache", test_clear_cache()))
     else:
         print("\n⚠ Skipping other tests - service is not available")
     

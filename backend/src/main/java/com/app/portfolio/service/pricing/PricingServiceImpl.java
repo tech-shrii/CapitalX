@@ -54,14 +54,7 @@ public class PricingServiceImpl implements PricingService {
     @Transactional(readOnly = true)
     public BigDecimal getCurrentPrice(Long assetId) {
         return assetPriceRepository.findFirstByAssetIdOrderByPriceDateDesc(assetId)
-                .map(assetPrice -> {
-                    // Add random variation for real-time simulation (±0.5% to ±2%)
-                    BigDecimal basePrice = assetPrice.getCurrentPrice();
-                    double variationPercent = (random.nextDouble() * 0.03 - 0.015); // -1.5% to +1.5%
-                    BigDecimal variation = basePrice.multiply(BigDecimal.valueOf(variationPercent));
-                    BigDecimal currentPrice = basePrice.add(variation);
-                    return currentPrice.max(BigDecimal.ZERO).setScale(4, RoundingMode.HALF_UP);
-                })
+                .map(AssetPrice::getCurrentPrice)
                 .orElseGet(() -> {
                     // If no price found, return buying rate as fallback
                     return assetRepository.findById(assetId)
@@ -71,7 +64,7 @@ public class PricingServiceImpl implements PricingService {
     }
 
     @Override
-    @Scheduled(initialDelay = 30000, fixedRate = 60000) // Initial delay 30s, then every 1m
+    @Scheduled(initialDelay = 30000, fixedRate = 20000) // Initial delay 30s, then every 20s
     @Transactional
     public void fetchAndUpdatePrices() {
         try {
@@ -157,16 +150,6 @@ public class PricingServiceImpl implements PricingService {
                                 .build();
                         assetPriceRepository.save(assetPrice);
                         log.debug("Updated price for {}: {}", symbol, price);
-                    } else {
-                        // Use fake data as fallback
-                        BigDecimal fakePrice = generateFakePrice(asset);
-                        AssetPrice assetPrice = AssetPrice.builder()
-                                .asset(asset)
-                                .currentPrice(fakePrice)
-                                .priceDate(Instant.now())
-                                .source(AssetPrice.PriceSource.FAKE)
-                                .build();
-                        assetPriceRepository.save(assetPrice);
                     }
                 } catch (Exception e) {
                     log.debug("Failed to update price for asset {}: {}", asset.getSymbol(), e.getMessage());
@@ -475,13 +458,6 @@ public class PricingServiceImpl implements PricingService {
             log.warn("Pricing service marked as unavailable after {} consecutive failures. " +
                     "Will retry health check in {} minutes.", failures, HEALTH_CHECK_INTERVAL / 60000);
         }
-    }
-
-    private BigDecimal generateFakePrice(Asset asset) {
-        BigDecimal basePrice = asset.getBuyingRate();
-        double variation = (random.nextDouble() * 0.2 - 0.1); // -10% to +10%
-        BigDecimal newPrice = basePrice.multiply(BigDecimal.ONE.add(BigDecimal.valueOf(variation)));
-        return newPrice.max(BigDecimal.ZERO).setScale(4, RoundingMode.HALF_UP);
     }
 
     /**

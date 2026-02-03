@@ -98,13 +98,18 @@ async function importCSV() {
         // Parse headers
         const headers = rows[0].split(',').map(h => h.trim().toLowerCase());
         
-        // Validate required columns (symbol, quantity, currency)
-        const requiredColumns = ['symbol', 'quantity', 'currency'];
+        // Validate required columns (symbol, quantity - currency is optional, defaults to USD)
+        const requiredColumns = ['symbol', 'quantity'];
         const hasRequiredColumns = requiredColumns.every(col => headers.includes(col));
         
         if (!hasRequiredColumns) {
-            showMessage(`CSV must have columns: ${requiredColumns.join(', ')}`, 'error');
+            showMessage(`CSV must have columns: ${requiredColumns.join(', ')}. Currency is optional (defaults to USD).`, 'error');
             return;
+        }
+        
+        const hasCurrency = headers.includes('currency');
+        if (!hasCurrency) {
+            console.log('[DEBUG] CSV missing currency column, will default to USD');
         }
 
         // Parse data rows
@@ -118,7 +123,8 @@ async function importCSV() {
                 asset[header] = row[index] || '';
             });
 
-            if (asset.symbol && asset.quantity && asset.currency) {
+            // Currency is optional - default to USD if not provided
+            if (asset.symbol && asset.quantity) {
                 assets.push({
                     symbol: asset.symbol.toUpperCase(),
                     quantity: parseFloat(asset.quantity),

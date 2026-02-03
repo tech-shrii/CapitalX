@@ -103,20 +103,34 @@ function displayClientDetail(client, assets) {
             <tbody>
                 ${assets.map(asset => {
                     const curr = asset.currency || 'USD';
-                    const sym = curr === 'USD' ? '$' : curr + ' ';
+                    // Use formatCurrency if available (from dashboard.js), otherwise fallback
+                    const formatCurr = (typeof window.formatCurrency === 'function') 
+                        ? window.formatCurrency 
+                        : (amt, cur) => {
+                            if (amt == null || amt === undefined || amt === '' || amt === 0) return 'N/A';
+                            const sym = cur === 'USD' ? '$' : cur === 'EUR' ? '€' : cur === 'GBP' ? '£' : cur === 'INR' ? '₹' : cur === 'JPY' ? '¥' : cur + ' ';
+                            return sym + parseFloat(amt).toFixed(2);
+                        };
+                    const formatPct = (typeof window.formatPercent === 'function')
+                        ? window.formatPercent
+                        : (pct) => {
+                            if (pct == null || pct === undefined || pct === '') return 'N/A';
+                            const sign = pct >= 0 ? '+' : '';
+                            return sign + parseFloat(pct).toFixed(2) + '%';
+                        };
                     return `
                     <tr>
                         <td>${asset.name}</td>
                         <td>${asset.category}</td>
                         <td>${curr}</td>
                         <td>${asset.quantity}</td>
-                        <td>${sym}${asset.buyingRate}</td>
-                        <td>${sym}${(asset.currentPrice != null ? asset.currentPrice : asset.buyingRate)}</td>
+                        <td>${formatCurr(asset.buyingRate, curr)}</td>
+                        <td>${formatCurr(asset.currentPrice != null ? asset.currentPrice : asset.buyingRate, curr)}</td>
                         <td class="${asset.profitLoss >= 0 ? 'positive' : 'negative'}">
-                            ${sym}${(asset.profitLoss || 0).toFixed(2)}
+                            ${formatCurr(asset.profitLoss, curr)}
                         </td>
                         <td class="${asset.profitLossPercent >= 0 ? 'positive' : 'negative'}">
-                            ${(asset.profitLossPercent || 0).toFixed(2)}%
+                            ${formatPct(asset.profitLossPercent)}
                         </td>
                         <td>
                             <button onclick="editAsset(${asset.id})" class="btn btn-secondary">Edit</button>

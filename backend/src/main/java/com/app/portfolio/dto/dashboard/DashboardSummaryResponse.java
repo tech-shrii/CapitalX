@@ -6,6 +6,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 @Data
 @Builder
@@ -18,6 +19,12 @@ public class DashboardSummaryResponse {
     private BigDecimal totalProfitLoss;
     private BigDecimal totalProfitLossPercent;
     private List<ClientSummaryDto> recentClients;
+    
+    // Additional fields for frontend charts
+    private Map<String, BigDecimal> assetAllocation; // Category -> Value
+    private PortfolioPerformanceData portfolioPerformance; // Historical data
+    private List<TopAssetDto> topAssets; // Top performing assets
+    private Map<String, BigDecimal> assetCategoryBreakdown; // Category -> Value
 
     @Data
     @Builder
@@ -27,5 +34,21 @@ public class DashboardSummaryResponse {
         private String email;
         private Long assetCount;
         private BigDecimal profitLoss;
+    }
+    
+    @Data
+    @Builder
+    public static class PortfolioPerformanceData {
+        private List<String> labels; // Dates
+        private List<BigDecimal> data; // Values
+    }
+    
+    @Data
+    @Builder
+    public static class TopAssetDto {
+        private String name;
+        private String category;
+        private BigDecimal currentValue;
+        private BigDecimal returns; // Percentage
     }
 }

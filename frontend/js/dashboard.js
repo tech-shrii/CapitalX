@@ -1,20 +1,60 @@
+let refreshIntervalId = null;
+let isModalOpen = false;
+
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('[DEBUG] DOMContentLoaded - Initializing dashboard');
     checkAuth();
     setupUser();
     setupTabs();
     loadTab('dashboard');
     loadClientsForSwitcher();
     setupClientSwitcher();
-    setInterval(refreshData, 10000); // Auto-refresh every 10 seconds
+    
+    // Start auto-refresh only if no modal is open
+    refreshIntervalId = setInterval(() => {
+        if (!isModalOpen) {
+            refreshData();
+        }
+    }, 10000); // Auto-refresh every 10 seconds
+    console.log('[DEBUG] Auto-refresh interval set:', refreshIntervalId);
 
     const addClientBtnHeader = document.getElementById('addClientBtnHeader');
+    console.log('[DEBUG] addClientBtnHeader found:', !!addClientBtnHeader);
     if (addClientBtnHeader) {
-        addClientBtnHeader.addEventListener('click', () => {
+        addClientBtnHeader.addEventListener('click', (e) => {
+            console.log('[DEBUG] Add Client header button clicked');
+            e.preventDefault();
             loadTab('setting'); // Switch to settings tab
             // Now, within settings, open the client management modal
             // This will be handled by the setupSettings function
         });
     }
+    
+    // Close modal handler for edit asset modal
+    const closeEditAssetModal = document.getElementById('closeEditAssetModal');
+    if (closeEditAssetModal) {
+        closeEditAssetModal.addEventListener('click', () => {
+            const modal = document.getElementById('editAssetModal');
+            if (modal) {
+                modal.classList.add('hidden');
+                isModalOpen = false;
+            }
+        });
+    }
+    
+    // Close modal when clicking outside
+    window.addEventListener('click', (e) => {
+        const editModal = document.getElementById('editAssetModal');
+        if (editModal && e.target === editModal) {
+            console.log('[DEBUG] Clicked outside editAssetModal');
+            editModal.classList.add('hidden');
+            editModal.style.removeProperty('display');
+            editModal.style.removeProperty('visibility');
+            editModal.style.removeProperty('opacity');
+            editModal.style.removeProperty('z-index');
+            isModalOpen = false;
+        }
+    });
 });
 
 let currentClientId = 'main'; // 'main' for the user's own portfolio
@@ -28,8 +68,21 @@ function setupClientSwitcher() {
 }
 
 function refreshData() {
-    const activeTab = document.querySelector('.nav a.active').getAttribute('data-tab');
-    loadTab(activeTab);
+    console.log('[DEBUG] refreshData called, isModalOpen:', isModalOpen);
+    // Don't refresh if a modal is open
+    if (isModalOpen) {
+        console.log('[DEBUG] Skipping refresh - modal is open');
+        return;
+    }
+    
+    const activeTab = document.querySelector('.nav a.active')?.getAttribute('data-tab');
+    console.log('[DEBUG] Active tab:', activeTab);
+    if (activeTab) {
+        console.log('[DEBUG] Loading tab:', activeTab);
+        loadTab(activeTab);
+    } else {
+        console.warn('[WARN] No active tab found');
+    }
 }
 
 
@@ -94,11 +147,43 @@ async function loadTab(tab) {
 async function loadDashboardData() {
     try {
         const url = currentClientId === 'main' ? '/dashboard/summary' : `/clients/${currentClientId}/dashboard/summary`;
-        const data = await apiCall(url);
+        console.log('[DEBUG] loadDashboardData - currentClientId:', currentClientId);
+        console.log('[DEBUG] loadDashboardData - URL:', url);
+        console.log('[DEBUG] loadDashboardData - Full URL:', `${window.API_BASE_URL}${url}`);
         
-        document.getElementById('totalPortfolioValue').textContent = formatCurrency(data.totalCurrentValue || 0);
-        document.getElementById('totalReturns').textContent = formatCurrency(data.totalProfitLoss || 0);
-        document.getElementById('totalInvestment').textContent = formatCurrency(data.totalInvested || 0);
+        const data = await apiCall(url);
+        console.log('[DEBUG] Dashboard data received:', data);
+        
+        const totalValueEl = document.getElementById('totalPortfolioValue');
+        const totalReturnsEl = document.getElementById('totalReturns');
+        const totalInvestmentEl = document.getElementById('totalInvestment');
+        
+        console.log('[DEBUG] DOM elements found:', {
+            totalPortfolioValue: !!totalValueEl,
+            totalReturns: !!totalReturnsEl,
+            totalInvestment: !!totalInvestmentEl
+        });
+        
+        // Get default currency from client or use USD
+        const defaultCurrency = data.currency || 'USD';
+        
+        if (totalValueEl) {
+            totalValueEl.textContent = formatCurrency(data.totalCurrentValue || 0, defaultCurrency);
+        } else {
+            console.error('[ERROR] totalPortfolioValue element not found');
+        }
+        
+        if (totalReturnsEl) {
+            totalReturnsEl.textContent = formatCurrency(data.totalProfitLoss || 0, defaultCurrency);
+        } else {
+            console.error('[ERROR] totalReturns element not found');
+        }
+        
+        if (totalInvestmentEl) {
+            totalInvestmentEl.textContent = formatCurrency(data.totalInvested || 0, defaultCurrency);
+        } else {
+            console.error('[ERROR] totalInvestment element not found');
+        }
         
         const pnl = data.totalProfitLoss || 0;
         const pnlPercent = data.totalProfitLossPercent || 0;
@@ -111,69 +196,132 @@ async function loadDashboardData() {
         }
 
         // Asset Allocation Pie Chart
-        if (data.assetAllocation) {
-            const pieCtx = document.getElementById('pie').getContext('2d');
-            new Chart(pieCtx, {
-                type: 'pie',
-                data: {
-                    labels: Object.keys(data.assetAllocation),
-                    datasets: [{
-                        data: Object.values(data.assetAllocation),
-                        backgroundColor: ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444', '#64748b'],
-                    }]
-                }
-            });
+        console.log('[DEBUG] assetAllocation:', data.assetAllocation);
+        if (data.assetAllocation && Object.keys(data.assetAllocation).length > 0) {
+            const pieCtx = document.getElementById('pie');
+            if (pieCtx) {
+                const pieChart = new Chart(pieCtx.getContext('2d'), {
+                    type: 'pie',
+                    data: {
+                        labels: Object.keys(data.assetAllocation),
+                        datasets: [{
+                            data: Object.values(data.assetAllocation).map(v => Number(v)),
+                            backgroundColor: ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444', '#64748b'],
+                        }]
+                    }
+                });
+                console.log('[DEBUG] Pie chart created');
+            } else {
+                console.error('[ERROR] Pie chart canvas not found');
+            }
+        } else {
+            console.warn('[WARN] No asset allocation data');
         }
 
         // Portfolio Performance Line Chart
-        if (data.portfolioPerformance) {
-            const lineCtx = document.getElementById('line').getContext('2d');
-            new Chart(lineCtx, {
-                type: 'line',
-                data: {
-                    labels: data.portfolioPerformance.labels,
-                    datasets: [{
-                        label: 'Portfolio Value',
-                        data: data.portfolioPerformance.data,
-                        borderColor: '#2563eb',
-                        tension: .4,
-                        fill: false
-                    }]
-                }
-            });
+        console.log('[DEBUG] portfolioPerformance:', data.portfolioPerformance);
+        if (data.portfolioPerformance && data.portfolioPerformance.labels && data.portfolioPerformance.data) {
+            const lineCtx = document.getElementById('line');
+            if (lineCtx) {
+                const lineChart = new Chart(lineCtx.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: data.portfolioPerformance.labels,
+                        datasets: [{
+                            label: 'Portfolio Value',
+                            data: data.portfolioPerformance.data.map(v => Number(v)),
+                            borderColor: '#2563eb',
+                            tension: .4,
+                            fill: false
+                        }]
+                    }
+                });
+                console.log('[DEBUG] Line chart created');
+            } else {
+                console.error('[ERROR] Line chart canvas not found');
+            }
+        } else {
+            console.warn('[WARN] No portfolio performance data');
         }
 
         // Top Performing Assets Table
-        if (data.topAssets) {
-            const topAssetsTable = document.getElementById('topAssetsTable').getElementsByTagName('tbody')[0];
-            topAssetsTable.innerHTML = data.topAssets.map(asset => `
-                <tr>
-                    <td>${asset.name}</td>
-                    <td><span class="badge badge-blue">${asset.category}</span></td>
-                    <td class="right">${formatCurrency(asset.currentValue)}</td>
-                    <td class="right ${asset.returns >= 0 ? 'positive' : 'negative'}">${formatPercent(asset.returns)}</td>
-                </tr>
-            `).join('');
+        console.log('[DEBUG] topAssets:', data.topAssets);
+        if (data.topAssets && data.topAssets.length > 0) {
+            const topAssetsTable = document.getElementById('topAssetsTable');
+            if (topAssetsTable) {
+                const tbody = topAssetsTable.getElementsByTagName('tbody')[0];
+                if (tbody) {
+                    const defaultCurrency = data.currency || 'USD';
+                    tbody.innerHTML = data.topAssets.map(asset => `
+                        <tr>
+                            <td>${asset.name || 'N/A'}</td>
+                            <td><span class="badge badge-blue">${asset.category || 'N/A'}</span></td>
+                            <td class="right">${formatCurrency(asset.currentValue || 0, asset.currency || defaultCurrency)}</td>
+                            <td class="right ${(asset.returns || 0) >= 0 ? 'positive' : 'negative'}">${formatPercent(asset.returns || 0)}</td>
+                        </tr>
+                    `).join('');
+                    console.log('[DEBUG] Top assets table populated');
+                } else {
+                    console.error('[ERROR] Top assets table tbody not found');
+                }
+            } else {
+                console.error('[ERROR] Top assets table not found');
+            }
+        } else {
+            console.warn('[WARN] No top assets data');
+            const topAssetsTable = document.getElementById('topAssetsTable');
+            if (topAssetsTable) {
+                const tbody = topAssetsTable.getElementsByTagName('tbody')[0];
+                if (tbody) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No assets found</td></tr>';
+                }
+            }
         }
 
         // Asset Category Breakdown Bar Chart
-        if (data.assetCategoryBreakdown) {
-            const barCtx = document.getElementById('bar').getContext('2d');
-            new Chart(barCtx, {
-                type: 'bar',
-                data: {
-                    labels: Object.keys(data.assetCategoryBreakdown),
-                    datasets: [{
-                        label: 'Value',
-                        data: Object.values(data.assetCategoryBreakdown),
-                        backgroundColor: '#3b82f6'
-                    }]
-                }
-            });
+        console.log('[DEBUG] assetCategoryBreakdown:', data.assetCategoryBreakdown);
+        if (data.assetCategoryBreakdown && Object.keys(data.assetCategoryBreakdown).length > 0) {
+            const barCtx = document.getElementById('bar');
+            if (barCtx) {
+                const barChart = new Chart(barCtx.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(data.assetCategoryBreakdown),
+                        datasets: [{
+                            label: 'Value',
+                            data: Object.values(data.assetCategoryBreakdown).map(v => Number(v)),
+                            backgroundColor: '#3b82f6'
+                        }]
+                    }
+                });
+                console.log('[DEBUG] Bar chart created');
+            } else {
+                console.error('[ERROR] Bar chart canvas not found');
+            }
+        } else {
+            console.warn('[WARN] No category breakdown data');
         }
 
     } catch (error) {
-        console.error('Error loading dashboard data:', error);
+        console.error('[ERROR] Error loading dashboard data:', error);
+        console.error('[ERROR] Error message:', error.message);
+        console.error('[ERROR] Error stack:', error.stack);
+        console.error('[ERROR] Current clientId:', currentClientId);
+        
+        // Show user-friendly error message
+        const errorContainer = document.getElementById('tab-content');
+        if (errorContainer) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'card';
+            errorDiv.style.color = 'red';
+            errorDiv.innerHTML = `
+                <h2>Error Loading Dashboard</h2>
+                <p><strong>Error:</strong> ${error.message}</p>
+                <p><strong>URL:</strong> ${window.API_BASE_URL}${currentClientId === 'main' ? '/dashboard/summary' : `/clients/${currentClientId}/dashboard/summary`}</p>
+                <p>Please check the console for more details.</p>
+            `;
+            errorContainer.appendChild(errorDiv);
+        }
     }
 }
 
@@ -195,17 +343,34 @@ async function deleteClient(clientId) {
 }
 
 async function editClient(clientId) {
-    console.log('Editing client:', clientId); // Debugging
+    console.log('[DEBUG] editClient called with clientId:', clientId);
+    console.log('[DEBUG] isModalOpen before:', isModalOpen);
+    
+    isModalOpen = true; // Prevent refresh while modal is open
+    console.log('[DEBUG] isModalOpen after setting:', isModalOpen);
+    
     try {
+        console.log('[DEBUG] Fetching client from API');
         const client = await apiCall(`/clients/${clientId}`);
+        console.log('[DEBUG] Client fetched:', client);
         
         const modal = document.getElementById('addClientModal');
+        console.log('[DEBUG] Modal element found:', !!modal);
+        if (!modal) {
+            console.error('[ERROR] addClientModal not found in DOM');
+            isModalOpen = false;
+            return;
+        }
+        
+        console.log('[DEBUG] Modal classes before:', modal.className);
         modal.classList.remove('hidden');
+        console.log('[DEBUG] Modal classes after removing hidden:', modal.className);
+        console.log('[DEBUG] Modal computed display:', window.getComputedStyle(modal).display);
         
         document.getElementById('clientName').value = client.name;
         document.getElementById('clientEmail').value = client.email;
-        document.getElementById('clientPhone').value = client.phone;
-        document.getElementById('clientCurrency').value = client.currency;
+        document.getElementById('clientPhone').value = client.phone || '';
+        document.getElementById('clientCurrency').value = client.currency || 'USD';
 
         const form = document.getElementById('addClientForm');
         form.onsubmit = async (e) => {
@@ -220,6 +385,7 @@ async function editClient(clientId) {
             try {
                 await apiCall(`/clients/${clientId}`, 'PUT', clientData);
                 modal.classList.add('hidden');
+                isModalOpen = false;
                 form.reset();
                 form.onsubmit = null; // Reset submit handler
                 loadClientsForSwitcher();
@@ -231,6 +397,7 @@ async function editClient(clientId) {
 
     } catch (error) {
         alert('Error fetching client data: ' + error.message);
+        isModalOpen = false;
     }
 }
 
@@ -257,15 +424,23 @@ async function loadClients() {
         // Add event listeners for edit and delete buttons
         document.querySelectorAll('.edit-client-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                const clientId = e.target.closest('.client-card').dataset.clientId;
-                editClient(clientId);
+                e.preventDefault();
+                e.stopPropagation();
+                const clientId = e.target.closest('.client-card')?.dataset.clientId;
+                if (clientId) {
+                    editClient(clientId);
+                }
             });
         });
 
         document.querySelectorAll('.delete-client-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                const clientId = e.target.closest('.client-card').dataset.clientId;
-                deleteClient(clientId);
+                e.preventDefault();
+                e.stopPropagation();
+                const clientId = e.target.closest('.client-card')?.dataset.clientId;
+                if (clientId) {
+                    deleteClient(clientId);
+                }
             });
         });
 
@@ -291,47 +466,114 @@ async function loadClientsForSwitcher() {
 }
 
 async function editAsset(assetId) {
+    console.log('[DEBUG] editAsset called with assetId:', assetId);
+    console.log('[DEBUG] isModalOpen before:', isModalOpen);
+    
+    isModalOpen = true; // Prevent refresh while modal is open
+    console.log('[DEBUG] isModalOpen after setting:', isModalOpen);
+    
     try {
-        const asset = await apiCall(`/assets/${assetId}`);
+        const url = currentClientId === 'main' ? `/assets/${assetId}` : `/clients/${currentClientId}/assets/${assetId}`;
+        console.log('[DEBUG] Fetching asset from URL:', url);
+        const asset = await apiCall(url);
+        console.log('[DEBUG] Asset fetched:', asset);
         
         const modal = document.getElementById('editAssetModal');
+        console.log('[DEBUG] Modal element found:', !!modal);
+        if (!modal) {
+            console.error('[ERROR] editAssetModal not found in DOM');
+            isModalOpen = false;
+            return;
+        }
+        
+        console.log('[DEBUG] Modal classes before:', modal.className);
+        
+        // Remove hidden class AND force display with inline style to override !important
         modal.classList.remove('hidden');
+        modal.style.setProperty('display', 'block', 'important');
+        modal.style.setProperty('visibility', 'visible', 'important');
+        modal.style.setProperty('opacity', '1', 'important');
+        modal.style.setProperty('z-index', '10000', 'important');
+        
+        console.log('[DEBUG] Modal classes after removing hidden:', modal.className);
+        
+        // Force display and check visibility
+        const computedStyle = window.getComputedStyle(modal);
+        console.log('[DEBUG] Modal computed display:', computedStyle.display);
+        console.log('[DEBUG] Modal computed visibility:', computedStyle.visibility);
+        console.log('[DEBUG] Modal computed z-index:', computedStyle.zIndex);
+        console.log('[DEBUG] Modal computed opacity:', computedStyle.opacity);
+        console.log('[DEBUG] Modal offsetParent:', modal.offsetParent);
+        console.log('[DEBUG] Modal offsetWidth:', modal.offsetWidth);
+        console.log('[DEBUG] Modal offsetHeight:', modal.offsetHeight);
         
         document.getElementById('editAssetId').value = asset.id;
-        document.getElementById('editAssetName').value = asset.name;
-        document.getElementById('editAssetCategory').value = asset.category;
-        document.getElementById('editAssetSymbol').value = asset.symbol;
-        document.getElementById('editAssetQuantity').value = asset.quantity;
-        document.getElementById('editAssetBuyingRate').value = asset.buyingRate;
-        document.getElementById('editAssetPurchaseDate').value = asset.purchaseDate;
-        document.getElementById('editAssetCurrency').value = asset.currency;
+        document.getElementById('editAssetName').value = asset.name || '';
+        document.getElementById('editAssetCategory').value = asset.category || 'STOCK';
+        document.getElementById('editAssetSymbol').value = asset.symbol || '';
+        document.getElementById('editAssetQuantity').value = asset.quantity || '';
+        document.getElementById('editAssetBuyingRate').value = asset.buyingRate || '';
+        document.getElementById('editAssetPurchaseDate').value = asset.purchaseDate || '';
+        document.getElementById('editAssetCurrency').value = asset.currency || 'USD';
 
         const form = document.getElementById('editAssetForm');
+        console.log('[DEBUG] Form element found:', !!form);
+        if (!form) {
+            console.error('[ERROR] editAssetForm not found in DOM');
+            isModalOpen = false;
+            modal.classList.add('hidden');
+            return;
+        }
         form.onsubmit = async (e) => {
             e.preventDefault();
             const assetData = {
                 name: document.getElementById('editAssetName').value,
                 category: document.getElementById('editAssetCategory').value,
                 symbol: document.getElementById('editAssetSymbol').value,
-                quantity: document.getElementById('editAssetQuantity').value,
-                buyingRate: document.getElementById('editAssetBuyingRate').value,
+                quantity: parseFloat(document.getElementById('editAssetQuantity').value),
+                buyingRate: parseFloat(document.getElementById('editAssetBuyingRate').value),
                 purchaseDate: document.getElementById('editAssetPurchaseDate').value,
                 currency: document.getElementById('editAssetCurrency').value,
             };
 
             try {
-                await apiCall(`/assets/${assetId}`, 'PUT', assetData);
+                const updateUrl = currentClientId === 'main' ? `/assets/${assetId}` : `/clients/${currentClientId}/assets/${assetId}`;
+                await apiCall(updateUrl, 'PUT', assetData);
                 modal.classList.add('hidden');
+                modal.style.removeProperty('display');
+                modal.style.removeProperty('visibility');
+                modal.style.removeProperty('opacity');
+                modal.style.removeProperty('z-index');
+                isModalOpen = false;
                 form.reset();
                 form.onsubmit = null; // Reset submit handler
                 refreshData(); // Refresh the current tab
             } catch (error) {
+                console.error('[ERROR] Backend error updating asset:', error);
                 alert('Error updating asset: ' + error.message);
             }
         };
 
+        const closeModalBtn = document.getElementById('closeEditAssetModal');
+        if (closeModalBtn) {
+            closeModalBtn.onclick = () => {
+                console.log('[DEBUG] Close modal button clicked');
+                modal.classList.add('hidden');
+                modal.style.removeProperty('display');
+                modal.style.removeProperty('visibility');
+                modal.style.removeProperty('opacity');
+                modal.style.removeProperty('z-index');
+                isModalOpen = false;
+                form.reset();
+                form.onsubmit = null;
+            };
+        }
+
     } catch (error) {
+        console.error('[ERROR] Error fetching asset data:', error);
+        console.error('[ERROR] Error stack:', error.stack);
         alert('Error fetching asset data: ' + error.message);
+        isModalOpen = false;
     }
 }
 
@@ -430,8 +672,32 @@ function setupSettings() {
     const addClientSubmitBtn = document.getElementById('addClientSubmitBtn');
     const csvImportSection = document.getElementById('csvImportSection');
 
-    addClientBtn.addEventListener('click', () => {
+    addClientBtn.addEventListener('click', (e) => {
+        console.log('[DEBUG] Add Client button clicked!', e);
+        e.preventDefault();
+        e.stopPropagation();
+        isModalOpen = true; // Prevent refresh while modal is open
+        console.log('[DEBUG] isModalOpen set to true');
+        console.log('[DEBUG] Modal classes before:', addClientModal.className);
+        
+        // Remove hidden class AND force display with inline style to override !important
         addClientModal.classList.remove('hidden');
+        addClientModal.style.setProperty('display', 'block', 'important');
+        addClientModal.style.setProperty('visibility', 'visible', 'important');
+        addClientModal.style.setProperty('opacity', '1', 'important');
+        addClientModal.style.setProperty('z-index', '10000', 'important');
+        
+        console.log('[DEBUG] Modal classes after:', addClientModal.className);
+        
+        // Force display and check visibility
+        const computedStyle = window.getComputedStyle(addClientModal);
+        console.log('[DEBUG] Modal computed display:', computedStyle.display);
+        console.log('[DEBUG] Modal computed visibility:', computedStyle.visibility);
+        console.log('[DEBUG] Modal computed z-index:', computedStyle.zIndex);
+        console.log('[DEBUG] Modal computed opacity:', computedStyle.opacity);
+        console.log('[DEBUG] Modal offsetParent:', addClientModal.offsetParent);
+        console.log('[DEBUG] Modal offsetWidth:', addClientModal.offsetWidth);
+        console.log('[DEBUG] Modal offsetHeight:', addClientModal.offsetHeight);
         addClientForm.reset();
         csvImportSection.classList.add('hidden'); // Hide CSV import initially
         addClientSubmitBtn.textContent = 'Add Client';
@@ -439,7 +705,26 @@ function setupSettings() {
     });
 
     closeClientModal.addEventListener('click', () => {
+        console.log('[DEBUG] Close client modal button clicked');
         addClientModal.classList.add('hidden');
+        addClientModal.style.removeProperty('display');
+        addClientModal.style.removeProperty('visibility');
+        addClientModal.style.removeProperty('opacity');
+        addClientModal.style.removeProperty('z-index');
+        isModalOpen = false;
+    });
+    
+    // Close modal when clicking outside
+    window.addEventListener('click', (e) => {
+        if (e.target === addClientModal) {
+            console.log('[DEBUG] Clicked outside addClientModal');
+            addClientModal.classList.add('hidden');
+            addClientModal.style.removeProperty('display');
+            addClientModal.style.removeProperty('visibility');
+            addClientModal.style.removeProperty('opacity');
+            addClientModal.style.removeProperty('z-index');
+            isModalOpen = false;
+        }
     });
 
     async function handleAddClientFormSubmit(e) {
@@ -460,27 +745,50 @@ function setupSettings() {
             loadClientsForSettings(); // Refresh client list in settings
         } catch (error) {
             alert('Error adding client: ' + error.message);
+            isModalOpen = false;
         }
     }
 
     async function handleCsvImportSubmit(e, clientId) {
         e.preventDefault();
+        console.log('[DEBUG] handleCsvImportSubmit called with clientId:', clientId);
+        
         const fileInput = document.getElementById('csvFile');
-        if (fileInput.files.length > 0) {
+        console.log('[DEBUG] File input found:', !!fileInput);
+        console.log('[DEBUG] Files selected:', fileInput?.files?.length || 0);
+        
+        if (fileInput && fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            console.log('[DEBUG] File details:', {
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                lastModified: new Date(file.lastModified)
+            });
+            
             const formData = new FormData();
-            formData.append('file', fileInput.files[0]);
+            formData.append('file', file);
+            console.log('[DEBUG] FormData created, calling API...');
+            
             try {
-                await apiCallFormData(`/clients/${clientId}/assets/import-csv`, formData);
-                alert('Client and assets added successfully!');
+                const result = await apiCallFormData(`/clients/${clientId}/assets/import-csv`, formData);
+                console.log('[DEBUG] CSV import successful:', result);
+                alert(`Successfully imported ${result.count || 0} assets!`);
                 addClientModal.classList.add('hidden');
+                isModalOpen = false;
                 addClientForm.reset();
                 loadClientsForSettings(); // Refresh client list in settings
             } catch (error) {
+                console.error('[ERROR] CSV import failed:', error);
+                console.error('[ERROR] Error message:', error.message);
+                console.error('[ERROR] Error stack:', error.stack);
                 alert('Error importing CSV: ' + error.message);
             }
         } else {
+            console.warn('[WARN] No CSV file selected');
             alert('No CSV file selected. Client added without assets.');
             addClientModal.classList.add('hidden');
+            isModalOpen = false;
             addClientForm.reset();
             loadClientsForSettings(); // Refresh client list in settings
         }
@@ -555,15 +863,23 @@ async function loadClientsForSettings() {
         // Add event listeners for edit and delete buttons
         document.querySelectorAll('#clientListSettings .edit-client-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                const clientId = e.target.closest('.client-card').dataset.clientId;
-                editClient(clientId);
+                e.preventDefault();
+                e.stopPropagation();
+                const clientId = e.target.closest('.client-card')?.dataset.clientId;
+                if (clientId) {
+                    editClient(clientId);
+                }
             });
         });
 
         document.querySelectorAll('#clientListSettings .delete-client-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                const clientId = e.target.closest('.client-card').dataset.clientId;
-                deleteClient(clientId);
+                e.preventDefault();
+                e.stopPropagation();
+                const clientId = e.target.closest('.client-card')?.dataset.clientId;
+                if (clientId) {
+                    deleteClient(clientId);
+                }
             });
         });
 
@@ -573,7 +889,14 @@ async function loadClientsForSettings() {
 }
 
 async function loadAssetCategoryTab(category) {
+    console.log('[DEBUG] loadAssetCategoryTab called for category:', category);
     const tabContent = document.getElementById('tab-content');
+    console.log('[DEBUG] tab-content element found:', !!tabContent);
+    if (!tabContent) {
+        console.error('[ERROR] tab-content not found');
+        return;
+    }
+    console.log('[DEBUG] Setting innerHTML for category tab');
     tabContent.innerHTML = `
         <div class="card">
             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -600,9 +923,29 @@ async function loadAssetCategoryTab(category) {
         </div>
     `;
 
-    document.getElementById('addAssetBtn').addEventListener('click', () => {
-        addAsset(category);
-    });
+        // Use setTimeout to ensure DOM is ready
+        setTimeout(() => {
+            const addAssetBtn = document.getElementById('addAssetBtn');
+            console.log('[DEBUG] loadAssetCategoryTab - addAssetBtn found:', !!addAssetBtn, 'for category:', category);
+            if (addAssetBtn) {
+                console.log('[DEBUG] Attaching click listener to addAssetBtn');
+                // Remove any existing listeners first
+                const newBtn = addAssetBtn.cloneNode(true);
+                addAssetBtn.parentNode.replaceChild(newBtn, addAssetBtn);
+                
+                newBtn.addEventListener('click', (e) => {
+                    console.log('[DEBUG] Add Asset button clicked!', e);
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('[DEBUG] Calling addAsset with category:', category);
+                    addAsset(category);
+                });
+                console.log('[DEBUG] Click listener attached successfully');
+            } else {
+                console.error('[ERROR] addAssetBtn not found for category:', category);
+                console.error('[ERROR] Available buttons:', document.querySelectorAll('button').length);
+            }
+        }, 100);
 
     try {
         const url = currentClientId === 'main' ? '/assets' : `/clients/${currentClientId}/assets`;
@@ -615,34 +958,59 @@ async function loadAssetCategoryTab(category) {
             return;
         }
 
-        assetTableBody.innerHTML = filteredAssets.map(asset => `
+        assetTableBody.innerHTML = filteredAssets.map(asset => {
+            const currency = asset.currency || 'USD';
+            return `
             <tr data-asset-id="${asset.id}">
                 <td>${asset.name}</td>
                 <td>${asset.symbol}</td>
                 <td>${asset.quantity}</td>
-                <td>${formatCurrency(asset.buyingRate)}</td>
-                <td>${formatCurrency(asset.currentPrice)}</td>
-                <td class="${asset.profitLoss >= 0 ? 'positive' : 'negative'}">${formatCurrency(asset.profitLoss)}</td>
+                <td>${formatCurrency(asset.buyingRate, currency)}</td>
+                <td>${formatCurrency(asset.currentPrice, currency)}</td>
+                <td class="${asset.profitLoss >= 0 ? 'positive' : 'negative'}">${formatCurrency(asset.profitLoss, currency)}</td>
                 <td class="${asset.profitLossPercent >= 0 ? 'positive' : 'negative'}">${formatPercent(asset.profitLossPercent)}</td>
                 <td>
                     <button class="btn btn-secondary btn-sm edit-asset-btn">Edit</button>
                     <button class="btn btn-danger btn-sm delete-asset-btn">Delete</button>
                 </td>
             </tr>
-        `).join('');
+        `;
+        }).join('');
 
         // Add event listeners for edit and delete buttons
-        document.querySelectorAll('.edit-asset-btn').forEach(btn => {
+        const editButtons = document.querySelectorAll('.edit-asset-btn');
+        console.log('[DEBUG] Found', editButtons.length, 'edit buttons');
+        editButtons.forEach((btn, index) => {
+            console.log('[DEBUG] Attaching listener to edit button', index);
             btn.addEventListener('click', (e) => {
-                const assetId = e.target.closest('tr').dataset.assetId;
-                editAsset(assetId);
+                console.log('[DEBUG] Edit button clicked!', e);
+                e.preventDefault();
+                e.stopPropagation();
+                const assetId = e.target.closest('tr')?.dataset.assetId;
+                console.log('[DEBUG] Asset ID from row:', assetId);
+                if (assetId) {
+                    editAsset(assetId);
+                } else {
+                    console.error('[ERROR] Could not find assetId from row');
+                }
             });
         });
 
-        document.querySelectorAll('.delete-asset-btn').forEach(btn => {
+        const deleteButtons = document.querySelectorAll('.delete-asset-btn');
+        console.log('[DEBUG] Found', deleteButtons.length, 'delete buttons');
+        deleteButtons.forEach((btn, index) => {
+            console.log('[DEBUG] Attaching listener to delete button', index);
             btn.addEventListener('click', (e) => {
-                const assetId = e.target.closest('tr').dataset.assetId;
-                deleteAsset(assetId);
+                console.log('[DEBUG] Delete button clicked!', e);
+                e.preventDefault();
+                e.stopPropagation();
+                const assetId = e.target.closest('tr')?.dataset.assetId;
+                console.log('[DEBUG] Asset ID from row:', assetId);
+                if (assetId) {
+                    deleteAsset(assetId);
+                } else {
+                    console.error('[ERROR] Could not find assetId from row');
+                }
             });
         });
 
@@ -747,72 +1115,48 @@ async function loadStatementTab() {
     });
 }
 
-async function editAsset(assetId) {
-    console.log('Editing asset:', assetId); // Debugging
-    try {
-        const url = currentClientId === 'main' ? `/assets/${assetId}` : `/clients/${currentClientId}/assets/${assetId}`;
-        const asset = await apiCall(url);
-        console.log('Fetched asset data:', asset); // Debugging
-        
-        const modal = document.getElementById('editAssetModal');
-        modal.classList.remove('hidden');
-        
-        document.getElementById('editAssetId').value = asset.id;
-        document.getElementById('editAssetName').value = asset.name;
-        document.getElementById('editAssetCategory').value = asset.category;
-        document.getElementById('editAssetSymbol').value = asset.symbol;
-        document.getElementById('editAssetQuantity').value = asset.quantity;
-        document.getElementById('editAssetBuyingRate').value = asset.buyingRate;
-        document.getElementById('editAssetPurchaseDate').value = asset.purchaseDate;
-        document.getElementById('editAssetCurrency').value = asset.currency;
-
-        const form = document.getElementById('editAssetForm');
-        form.onsubmit = async (e) => {
-            e.preventDefault();
-            const assetData = {
-                name: document.getElementById('editAssetName').value,
-                category: document.getElementById('editAssetCategory').value,
-                symbol: document.getElementById('editAssetSymbol').value,
-                quantity: parseFloat(document.getElementById('editAssetQuantity').value),
-                buyingRate: parseFloat(document.getElementById('editAssetBuyingRate').value),
-                purchaseDate: document.getElementById('editAssetPurchaseDate').value,
-                currency: document.getElementById('editAssetCurrency').value,
-            };
-
-            try {
-                const updateUrl = currentClientId === 'main' ? `/assets/${assetId}` : `/clients/${currentClientId}/assets/${assetId}`;
-                await apiCall(updateUrl, 'PUT', assetData);
-                modal.classList.add('hidden');
-                form.reset();
-                form.onsubmit = null; // Reset submit handler
-                refreshData(); // Refresh the current tab
-            } catch (error) {
-                alert('Error updating asset: ' + error.message);
-            }
-        };
-
-        const closeModalBtn = document.getElementById('closeEditAssetModal');
-        closeModalBtn.onclick = () => {
-            modal.classList.add('hidden');
-            form.reset();
-            form.onsubmit = null;
-        };
-
-    } catch (error) {
-        console.error('Error fetching asset data:', error); // Debugging
-        alert('Error fetching asset data: ' + error.message);
-    }
-}
 
 async function addAsset(category) {
-    console.log('Adding asset for category:', category); // Debugging
+    console.log('[DEBUG] addAsset called with category:', category);
+    console.log('[DEBUG] isModalOpen before:', isModalOpen);
+    
+    isModalOpen = true; // Prevent refresh while modal is open
+    console.log('[DEBUG] isModalOpen after setting:', isModalOpen);
+    
     const modal = document.getElementById('editAssetModal');
+    console.log('[DEBUG] Modal element found:', !!modal);
+    if (!modal) {
+        console.error('[ERROR] editAssetModal not found in DOM');
+        isModalOpen = false;
+        return;
+    }
+    
+    console.log('[DEBUG] Modal classes before:', modal.className);
     modal.classList.remove('hidden');
+    console.log('[DEBUG] Modal classes after removing hidden:', modal.className);
+    
+    // Force display and check visibility
+    const computedStyle = window.getComputedStyle(modal);
+    console.log('[DEBUG] Modal computed display:', computedStyle.display);
+    console.log('[DEBUG] Modal computed visibility:', computedStyle.visibility);
+    console.log('[DEBUG] Modal computed z-index:', computedStyle.zIndex);
+    console.log('[DEBUG] Modal computed opacity:', computedStyle.opacity);
+    console.log('[DEBUG] Modal offsetParent:', modal.offsetParent);
+    console.log('[DEBUG] Modal offsetWidth:', modal.offsetWidth);
+    console.log('[DEBUG] Modal offsetHeight:', modal.offsetHeight);
     
     const form = document.getElementById('editAssetForm');
+    console.log('[DEBUG] Form element found:', !!form);
+    if (!form) {
+        console.error('[ERROR] editAssetForm not found in DOM');
+        isModalOpen = false;
+        modal.classList.add('hidden');
+        return;
+    }
     form.reset();
     document.getElementById('editAssetId').value = ''; // Clear ID for new asset
     document.getElementById('editAssetCategory').value = category.toUpperCase();
+    console.log('[DEBUG] Form reset and category set');
 
     form.onsubmit = async (e) => {
         e.preventDefault();
@@ -827,23 +1171,41 @@ async function addAsset(category) {
         };
 
         try {
+            console.log('[DEBUG] Submitting asset data:', assetData);
             const url = currentClientId === 'main' ? '/assets' : `/clients/${currentClientId}/assets`;
-            await apiCall(url, 'POST', assetData);
+            console.log('[DEBUG] POST URL:', url);
+            const result = await apiCall(url, 'POST', assetData);
+            console.log('[DEBUG] Asset added successfully:', result);
             modal.classList.add('hidden');
+            modal.style.removeProperty('display');
+            modal.style.removeProperty('visibility');
+            modal.style.removeProperty('opacity');
+            modal.style.removeProperty('z-index');
+            isModalOpen = false;
             form.reset();
             form.onsubmit = null; // Reset submit handler
             refreshData();
         } catch (error) {
+            console.error('[ERROR] Backend error adding asset:', error);
+            console.error('[ERROR] Error stack:', error.stack);
             alert('Error adding asset: ' + error.message);
         }
     };
 
     const closeModalBtn = document.getElementById('closeEditAssetModal');
-    closeModalBtn.onclick = () => {
-        modal.classList.add('hidden');
-        form.reset();
-        form.onsubmit = null;
-    };
+    if (closeModalBtn) {
+        closeModalBtn.onclick = () => {
+            console.log('[DEBUG] Close modal button clicked (addAsset)');
+            modal.classList.add('hidden');
+            modal.style.removeProperty('display');
+            modal.style.removeProperty('visibility');
+            modal.style.removeProperty('opacity');
+            modal.style.removeProperty('z-index');
+            isModalOpen = false;
+            form.reset();
+            form.onsubmit = null;
+        };
+    }
 }
 
 async function deleteAsset(assetId) {
@@ -860,11 +1222,101 @@ async function deleteAsset(assetId) {
 }
 
 
-function formatCurrency(amount) {
-    return '₹' + parseFloat(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Make formatCurrency globally available
+window.formatCurrency = function(amount, currency = 'USD') {
+    if (amount == null || amount === undefined || amount === '') {
+        return 'N/A';
+    }
+    
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount) || numAmount === 0) {
+        return 'N/A';
+    }
+    
+    // Currency symbol mapping
+    const currencySymbols = {
+        'USD': '$',
+        'EUR': '€',
+        'GBP': '£',
+        'INR': '₹',
+        'JPY': '¥',
+        'CHF': 'CHF ',
+        'CAD': 'C$',
+        'AUD': 'A$',
+        'CNY': '¥',
+        'SGD': 'S$',
+        'HKD': 'HK$'
+    };
+    
+    const symbol = currencySymbols[currency?.toUpperCase()] || currency?.toUpperCase() + ' ';
+    const formatted = numAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    
+    return symbol + formatted;
+};
+
+// Make formatPercent globally available
+window.formatPercent = function(percent) {
+    if (percent == null || percent === undefined || percent === '') {
+        return 'N/A';
+    }
+    const numPercent = parseFloat(percent);
+    if (isNaN(numPercent)) {
+        return 'N/A';
+    }
+    const sign = numPercent >= 0 ? '+' : '';
+    return sign + numPercent.toFixed(2) + '%';
 }
 
-function formatPercent(percent) {
-    const sign = percent >= 0 ? '+' : '';
-    return sign + parseFloat(percent).toFixed(2) + '%';
-}
+// Debug function to test modal visibility
+window.testModal = function() {
+    console.log('[TEST] Testing modal visibility...');
+    const modal = document.getElementById('editAssetModal');
+    console.log('[TEST] Modal found:', !!modal);
+    if (modal) {
+        console.log('[TEST] Modal classes:', modal.className);
+        console.log('[TEST] Modal has hidden class:', modal.classList.contains('hidden'));
+        modal.classList.remove('hidden');
+        console.log('[TEST] Modal classes after remove:', modal.className);
+        const style = window.getComputedStyle(modal);
+        console.log('[TEST] Modal display:', style.display);
+        console.log('[TEST] Modal visibility:', style.visibility);
+        console.log('[TEST] Modal z-index:', style.zIndex);
+        console.log('[TEST] Modal position:', style.position);
+        console.log('[TEST] Modal width:', style.width);
+        console.log('[TEST] Modal height:', style.height);
+        console.log('[TEST] Modal offsetParent:', modal.offsetParent);
+        console.log('[TEST] Modal offsetWidth:', modal.offsetWidth);
+        console.log('[TEST] Modal offsetHeight:', modal.offsetHeight);
+        
+        // Try to force show
+        modal.style.display = 'block';
+        modal.style.visibility = 'visible';
+        modal.style.zIndex = '10000';
+        console.log('[TEST] Modal forced to display');
+        
+        setTimeout(() => {
+            modal.classList.add('hidden');
+            console.log('[TEST] Modal hidden again after 3 seconds');
+        }, 3000);
+    }
+};
+
+// Debug function to test button clicks
+window.testAddAssetButton = function() {
+    console.log('[TEST] Testing Add Asset button...');
+    const btn = document.getElementById('addAssetBtn');
+    console.log('[TEST] Button found:', !!btn);
+    if (btn) {
+        console.log('[TEST] Button text:', btn.textContent);
+        console.log('[TEST] Button classes:', btn.className);
+        console.log('[TEST] Button disabled:', btn.disabled);
+        console.log('[TEST] Simulating click...');
+        btn.click();
+    } else {
+        console.error('[TEST] Button not found!');
+    }
+};
+
+// Make functions globally available for debugging
+window.debugModal = window.testModal;
+window.debugAddAsset = window.testAddAssetButton;

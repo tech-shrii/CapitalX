@@ -24,6 +24,15 @@ public interface AssetService {
     PnlResponse calculatePnL(Long clientId, Long userId);
 
     int importAssets(List<Map<String, Object>> assets, Long userId);
+    
+    /**
+     * Import assets from CSV file for a specific client
+     * @param file CSV file containing asset data
+     * @param clientId Client ID to import assets for
+     * @param userId User ID for authorization
+     * @return Number of assets imported
+     */
+    int importAssetsFromCSV(java.io.InputStream csvInputStream, Long clientId, Long userId) throws java.io.IOException;
 
     String exportAssetsAsCSV(Long userId);
 }

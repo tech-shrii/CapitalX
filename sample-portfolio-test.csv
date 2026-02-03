@@ -1,0 +1,8 @@
+Client Name,Asset Name,Category,Symbol,Quantity,Buying Rate,Purchase Date
+John Doe,Apple Inc.,STOCK,AAPL,10.0,150.25,2023-01-15
+John Doe,Microsoft Corp.,STOCK,MSFT,5.0,280.50,2022-11-20
+Jane Smith,Bitcoin,CRYPTO,BTC,0.5,35000.00,2023-03-10
+Jane Smith,Vanguard S&P 500,MUTUAL_FUND,VOO,20.0,380.75,2023-02-01
+John Doe,Tesla Inc.,STOCK,TSLA,2.0,800.00,2023-04-05
+Jane Smith,Ethereum,CRYPTO,ETH,3.0,2000.00,2023-01-25
+John Doe,Amazon.com Inc.,STOCK,AMZN,7.0,100.00,2023-05-12

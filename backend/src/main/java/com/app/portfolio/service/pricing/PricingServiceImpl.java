@@ -11,6 +11,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
@@ -18,6 +20,8 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 @RequiredArgsConstructor
@@ -32,9 +36,19 @@ public class PricingServiceImpl implements PricingService {
     @Value("${pricing.service.url:http://localhost:8000}")
     private String pricingServiceUrl;
 
+    @Value("${pricing.service.enabled:true}")
+    private boolean pricingServiceEnabled;
+
     // Cache for external prices with timestamp
     private final Map<String, CachedPrice> priceCache = new ConcurrentHashMap<>();
     private static final long PRICE_CACHE_TTL = 60000; // 60 seconds
+
+    // Service availability tracking
+    private final AtomicBoolean serviceAvailable = new AtomicBoolean(true);
+    private final AtomicLong lastHealthCheckTime = new AtomicLong(0);
+    private static final long HEALTH_CHECK_INTERVAL = 300000; // 5 minutes
+    private static final int MAX_CONSECUTIVE_FAILURES = 3;
+    private final AtomicLong consecutiveFailures = new AtomicLong(0);
 
     @Override
     @Transactional(readOnly = true)
@@ -61,6 +75,18 @@ public class PricingServiceImpl implements PricingService {
     @Transactional
     public void fetchAndUpdatePrices() {
         try {
+            // Check if pricing service is enabled
+            if (!pricingServiceEnabled) {
+                log.debug("Pricing service is disabled, skipping scheduled update");
+                return;
+            }
+
+            // Check service availability before attempting update
+            if (!isServiceAvailable()) {
+                log.debug("Pricing service is unavailable, skipping scheduled update. Using cached/fake prices.");
+                return;
+            }
+
             log.debug("Starting scheduled price update...");
             List<Asset> assets = assetRepository.findAll();
 
@@ -88,6 +114,9 @@ public class PricingServiceImpl implements PricingService {
                 pricesData = new HashMap<>();
             }
 
+            // Track if we got any successful prices
+            boolean hasSuccessfulPrices = false;
+
             // Update prices for each asset
             for (Asset asset : assets) {
                 try {
@@ -105,6 +134,7 @@ public class PricingServiceImpl implements PricingService {
                             Object priceObj = priceMap.get("price");
                             if (priceObj instanceof Number) {
                                 price = BigDecimal.valueOf(((Number) priceObj).doubleValue());
+                                hasSuccessfulPrices = true;
                             }
                         }
                     }
@@ -114,6 +144,7 @@ public class PricingServiceImpl implements PricingService {
                         PriceResponse externalPrice = getCurrentPriceBySymbol(symbol);
                         if (externalPrice != null && externalPrice.getPrice() != null) {
                             price = BigDecimal.valueOf(externalPrice.getPrice());
+                            hasSuccessfulPrices = true;
                         }
                     }
 
@@ -141,10 +172,18 @@ public class PricingServiceImpl implements PricingService {
                     log.debug("Failed to update price for asset {}: {}", asset.getSymbol(), e.getMessage());
                 }
             }
+
+            // Reset failure counter if we got successful prices
+            if (hasSuccessfulPrices) {
+                consecutiveFailures.set(0);
+                serviceAvailable.set(true);
+            }
+
             clearExpiredCache();
             log.debug("Price update completed");
         } catch (Exception e) {
             log.error("Error in scheduled price update: {}", e.getMessage(), e);
+            recordServiceFailure();
         }
     }
 
@@ -159,16 +198,33 @@ public class PricingServiceImpl implements PricingService {
                 return cached.value;
             }
 
+            // Check service availability
+            if (!isServiceAvailable()) {
+                log.debug("Pricing service unavailable, returning null for {}", symbol);
+                return null;
+            }
+
             String url = pricingServiceUrl + "/api/price/" + symbol;
             PriceResponse response = restTemplate.getForObject(url, PriceResponse.class);
 
             if (response != null) {
                 priceCache.put(cacheKey, new CachedPrice(response, System.currentTimeMillis()));
+                consecutiveFailures.set(0);
+                serviceAvailable.set(true);
             }
 
             return response;
+        } catch (ResourceAccessException e) {
+            // Connection refused, service unavailable
+            handleConnectionError("Error fetching price for " + symbol, e);
+            return null;
+        } catch (RestClientException e) {
+            // Other REST client errors
+            log.warn("REST client error fetching price for {}: {}", symbol, e.getMessage());
+            recordServiceFailure();
+            return null;
         } catch (Exception e) {
-            log.error("Error fetching price for {}: {}", symbol, e.getMessage());
+            log.error("Unexpected error fetching price for {}: {}", symbol, e.getMessage());
             return null;
         }
     }
@@ -176,11 +232,30 @@ public class PricingServiceImpl implements PricingService {
     @Override
     public ChartResponse getChartData(String symbol, String period, String interval) {
         try {
+            if (!isServiceAvailable()) {
+                log.debug("Pricing service unavailable, returning null for chart data {}", symbol);
+                return null;
+            }
+
             String url = String.format("%s/api/chart/%s?period=%s&interval=%s",
                     pricingServiceUrl, symbol, period, interval);
-            return restTemplate.getForObject(url, ChartResponse.class);
+            ChartResponse response = restTemplate.getForObject(url, ChartResponse.class);
+            
+            if (response != null) {
+                consecutiveFailures.set(0);
+                serviceAvailable.set(true);
+            }
+            
+            return response;
+        } catch (ResourceAccessException e) {
+            handleConnectionError("Error fetching chart data for " + symbol, e);
+            return null;
+        } catch (RestClientException e) {
+            log.warn("REST client error fetching chart data for {}: {}", symbol, e.getMessage());
+            recordServiceFailure();
+            return null;
         } catch (Exception e) {
-            log.error("Error fetching chart data for {}: {}", symbol, e.getMessage());
+            log.error("Unexpected error fetching chart data for {}: {}", symbol, e.getMessage());
             return null;
         }
     }
@@ -188,10 +263,29 @@ public class PricingServiceImpl implements PricingService {
     @Override
     public PortfolioValueResponse getPortfolioValue(Map<String, Double> portfolio) {
         try {
+            if (!isServiceAvailable()) {
+                log.debug("Pricing service unavailable, returning null for portfolio value");
+                return null;
+            }
+
             String url = pricingServiceUrl + "/api/portfolio/value";
-            return restTemplate.postForObject(url, portfolio, PortfolioValueResponse.class);
+            PortfolioValueResponse response = restTemplate.postForObject(url, portfolio, PortfolioValueResponse.class);
+            
+            if (response != null) {
+                consecutiveFailures.set(0);
+                serviceAvailable.set(true);
+            }
+            
+            return response;
+        } catch (ResourceAccessException e) {
+            handleConnectionError("Error fetching portfolio value", e);
+            return null;
+        } catch (RestClientException e) {
+            log.warn("REST client error fetching portfolio value: {}", e.getMessage());
+            recordServiceFailure();
+            return null;
         } catch (Exception e) {
-            log.error("Error fetching portfolio value: {}", e.getMessage());
+            log.error("Unexpected error fetching portfolio value: {}", e.getMessage());
             return null;
         }
     }
@@ -200,11 +294,30 @@ public class PricingServiceImpl implements PricingService {
     public PortfolioChartResponse getPortfolioChart(Map<String, Double> portfolio,
                                                      String period, String interval) {
         try {
+            if (!isServiceAvailable()) {
+                log.debug("Pricing service unavailable, returning null for portfolio chart");
+                return null;
+            }
+
             String url = String.format("%s/api/portfolio/chart?period=%s&interval=%s",
                     pricingServiceUrl, period, interval);
-            return restTemplate.postForObject(url, portfolio, PortfolioChartResponse.class);
+            PortfolioChartResponse response = restTemplate.postForObject(url, portfolio, PortfolioChartResponse.class);
+            
+            if (response != null) {
+                consecutiveFailures.set(0);
+                serviceAvailable.set(true);
+            }
+            
+            return response;
+        } catch (ResourceAccessException e) {
+            handleConnectionError("Error fetching portfolio chart", e);
+            return null;
+        } catch (RestClientException e) {
+            log.warn("REST client error fetching portfolio chart: {}", e.getMessage());
+            recordServiceFailure();
+            return null;
         } catch (Exception e) {
-            log.error("Error fetching portfolio chart: {}", e.getMessage());
+            log.error("Unexpected error fetching portfolio chart: {}", e.getMessage());
             return null;
         }
     }
@@ -212,10 +325,29 @@ public class PricingServiceImpl implements PricingService {
     @Override
     public Map<String, Object> getMultiplePrices(List<String> symbols) {
         try {
+            if (!isServiceAvailable()) {
+                log.debug("Pricing service unavailable, returning empty map for multiple prices");
+                return new HashMap<>();
+            }
+
             String url = pricingServiceUrl + "/api/prices";
-            return restTemplate.postForObject(url, symbols, Map.class);
+            Map<String, Object> response = restTemplate.postForObject(url, symbols, Map.class);
+            
+            if (response != null && !response.isEmpty()) {
+                consecutiveFailures.set(0);
+                serviceAvailable.set(true);
+            }
+            
+            return response != null ? response : new HashMap<>();
+        } catch (ResourceAccessException e) {
+            handleConnectionError("Error fetching multiple prices", e);
+            return new HashMap<>();
+        } catch (RestClientException e) {
+            log.warn("REST client error fetching multiple prices: {}", e.getMessage());
+            recordServiceFailure();
+            return new HashMap<>();
         } catch (Exception e) {
-            log.error("Error fetching multiple prices: {}", e.getMessage());
+            log.error("Unexpected error fetching multiple prices: {}", e.getMessage());
             return new HashMap<>();
         }
     }
@@ -223,15 +355,30 @@ public class PricingServiceImpl implements PricingService {
     @Override
     public Map<String, Object> bulkFetchPrices(List<String> symbols) {
         try {
+            if (!isServiceAvailable()) {
+                log.debug("Pricing service unavailable, returning empty map for bulk prices");
+                return new HashMap<>();
+            }
+
             String url = pricingServiceUrl + "/api/prices/bulk";
             log.debug("Bulk fetching prices for {} symbols", symbols.size());
             Map<String, Object> response = restTemplate.postForObject(url, symbols, Map.class);
-            if (response == null) {
-                return new HashMap<>();
+            
+            if (response != null && !response.isEmpty()) {
+                consecutiveFailures.set(0);
+                serviceAvailable.set(true);
             }
-            return response;
+            
+            return response != null ? response : new HashMap<>();
+        } catch (ResourceAccessException e) {
+            handleConnectionError("Error bulk fetching prices", e);
+            return new HashMap<>();
+        } catch (RestClientException e) {
+            log.warn("REST client error bulk fetching prices: {}", e.getMessage());
+            recordServiceFailure();
+            return new HashMap<>();
         } catch (Exception e) {
-            log.error("Error bulk fetching prices: {}", e.getMessage());
+            log.error("Unexpected error bulk fetching prices: {}", e.getMessage());
             return new HashMap<>();
         }
     }
@@ -239,6 +386,95 @@ public class PricingServiceImpl implements PricingService {
     @Override
     public void clearExpiredCache() {
         priceCache.entrySet().removeIf(entry -> entry.getValue().isExpired());
+    }
+
+    /**
+     * Check if pricing service is available
+     * Performs health check if enough time has passed since last check
+     */
+    private boolean isServiceAvailable() {
+        long currentTime = System.currentTimeMillis();
+        long lastCheck = lastHealthCheckTime.get();
+        
+        // If service is marked as unavailable and enough time hasn't passed, skip check
+        if (!serviceAvailable.get() && (currentTime - lastCheck) < HEALTH_CHECK_INTERVAL) {
+            return false;
+        }
+        
+        // Perform health check if enough time has passed
+        if ((currentTime - lastCheck) >= HEALTH_CHECK_INTERVAL) {
+            boolean available = checkServiceHealth();
+            lastHealthCheckTime.set(currentTime);
+            serviceAvailable.set(available);
+            return available;
+        }
+        
+        return serviceAvailable.get();
+    }
+
+    /**
+     * Perform a health check on the pricing service
+     */
+    private boolean checkServiceHealth() {
+        try {
+            // Try the health endpoint first
+            String healthUrl = pricingServiceUrl + "/api/health";
+            restTemplate.getForObject(healthUrl, Map.class);
+            log.debug("Pricing service health check passed");
+            consecutiveFailures.set(0);
+            return true;
+        } catch (ResourceAccessException e) {
+            log.debug("Pricing service health check failed (connection error): {}", e.getMessage());
+            return false;
+        } catch (Exception e) {
+            // If /api/health endpoint doesn't exist or returns error, try a simple price endpoint
+            try {
+                String testUrl = pricingServiceUrl + "/api/price/AAPL";
+                restTemplate.getForObject(testUrl, Map.class);
+                log.debug("Pricing service health check passed (via test endpoint)");
+                consecutiveFailures.set(0);
+                return true;
+            } catch (ResourceAccessException ex) {
+                log.debug("Pricing service health check failed (connection error): {}", ex.getMessage());
+                return false;
+            } catch (Exception ex) {
+                log.debug("Pricing service health check failed: {}", ex.getMessage());
+                return false;
+            }
+        }
+    }
+
+    /**
+     * Handle connection errors (service unavailable)
+     */
+    private void handleConnectionError(String context, ResourceAccessException e) {
+        String errorMsg = e.getMessage();
+        boolean isConnectionRefused = errorMsg != null && 
+            (errorMsg.contains("Connection refused") || 
+             errorMsg.contains("connect") ||
+             errorMsg.contains("I/O error"));
+        
+        if (isConnectionRefused) {
+            // Use WARN level for connection refused (service unavailable) - less noisy than ERROR
+            log.warn("{} - Pricing service unavailable (connection refused). Service may be down. {}", 
+                    context, pricingServiceUrl);
+            recordServiceFailure();
+        } else {
+            log.error("{} - Connection error: {}", context, e.getMessage());
+            recordServiceFailure();
+        }
+    }
+
+    /**
+     * Record a service failure and update availability status
+     */
+    private void recordServiceFailure() {
+        long failures = consecutiveFailures.incrementAndGet();
+        if (failures >= MAX_CONSECUTIVE_FAILURES) {
+            serviceAvailable.set(false);
+            log.warn("Pricing service marked as unavailable after {} consecutive failures. " +
+                    "Will retry health check in {} minutes.", failures, HEALTH_CHECK_INTERVAL / 60000);
+        }
     }
 
     private BigDecimal generateFakePrice(Asset asset) {

@@ -13,18 +13,26 @@ import com.app.portfolio.repository.ClientRepository;
 import com.app.portfolio.repository.UserRepository;
 import com.app.portfolio.service.pricing.PricingService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AssetServiceImpl implements AssetService {
@@ -276,5 +284,209 @@ public class AssetServiceImpl implements AssetService {
         }
 
         return csv.toString();
+    }
+
+    @Override
+    @Transactional
+    public int importAssetsFromCSV(InputStream csvInputStream, Long clientId, Long userId) throws IOException {
+        log.debug("Importing CSV assets for clientId: {}, userId: {}", clientId, userId);
+        
+        try {
+            // Verify client belongs to user
+            if (!clientRepository.existsByIdAndUserId(clientId, userId)) {
+                log.warn("Client {} does not belong to user {}", clientId, userId);
+                throw new ResourceNotFoundException("Client", clientId);
+            }
+
+            Client client = clientRepository.findById(clientId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Client", clientId));
+            log.debug("Client found: {}", client.getName());
+
+            // Parse CSV file
+            List<Map<String, Object>> assets = new ArrayList<>();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(csvInputStream))) {
+                String line = reader.readLine();
+                if (line == null) {
+                    log.warn("CSV file is empty");
+                    return 0;
+                }
+
+                // Parse header
+                String[] headers = line.split(",");
+                for (int i = 0; i < headers.length; i++) {
+                    headers[i] = headers[i].trim().toLowerCase();
+                }
+                log.debug("CSV headers: {}", String.join(", ", headers));
+
+                // Validate required columns (currency is optional, defaults to USD)
+                List<String> requiredColumns = List.of("symbol", "quantity");
+                boolean hasCurrencyColumn = false;
+                for (String header : headers) {
+                    if (header.equals("currency")) {
+                        hasCurrencyColumn = true;
+                        break;
+                    }
+                }
+                
+                for (String required : requiredColumns) {
+                    boolean found = false;
+                    for (String header : headers) {
+                        if (header.equals(required)) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        log.error("Missing required column: {}", required);
+                        throw new IllegalArgumentException("CSV must have column: " + required);
+                    }
+                }
+                
+                if (!hasCurrencyColumn) {
+                    log.warn("CSV missing currency column, will default to USD for all assets");
+                }
+
+                // Parse data rows
+                int lineNumber = 1;
+                while ((line = reader.readLine()) != null) {
+                    lineNumber++;
+                    if (line.trim().isEmpty()) {
+                        continue;
+                    }
+
+                    try {
+                        String[] values = parseCSVLine(line);
+                        if (values.length < headers.length) {
+                            log.warn("Line {} has fewer values than headers, skipping", lineNumber);
+                            continue;
+                        }
+
+                        Map<String, Object> assetData = new HashMap<>();
+                        for (int i = 0; i < headers.length && i < values.length; i++) {
+                            String value = values[i].trim();
+                            if (!value.isEmpty()) {
+                                assetData.put(headers[i], value);
+                            }
+                        }
+                        
+                        // Validate required fields
+                        if (!assetData.containsKey("symbol") || assetData.get("symbol").toString().isEmpty()) {
+                            log.warn("Line {} missing symbol, skipping", lineNumber);
+                            continue;
+                        }
+                        if (!assetData.containsKey("quantity") || assetData.get("quantity").toString().isEmpty()) {
+                            log.warn("Line {} missing quantity, skipping", lineNumber);
+                            continue;
+                        }
+                        
+                        // Currency is optional - default to USD if not provided or empty
+                        if (!assetData.containsKey("currency") || 
+                            assetData.get("currency") == null || 
+                            assetData.get("currency").toString().trim().isEmpty()) {
+                            log.debug("Line {} missing or empty currency, defaulting to USD", lineNumber);
+                            assetData.put("currency", "USD");
+                        }
+
+                        assets.add(assetData);
+                        log.debug("Parsed asset from line {}: symbol={}, quantity={}, currency={}", 
+                                lineNumber, assetData.get("symbol"), assetData.get("quantity"), assetData.get("currency"));
+                    } catch (Exception e) {
+                        log.warn("Error parsing line {}: {}", lineNumber, e.getMessage());
+                        continue;
+                    }
+                }
+            }
+
+            log.debug("Parsed {} assets from CSV", assets.size());
+
+            // Import assets using existing logic
+            int importedCount = 0;
+            for (Map<String, Object> assetData : assets) {
+                try {
+                    String categoryStr = assetData.getOrDefault("assettype", "STOCK").toString().toUpperCase();
+                    Asset.AssetCategory category;
+                    try {
+                        category = Asset.AssetCategory.valueOf(categoryStr);
+                    } catch (IllegalArgumentException e) {
+                        log.warn("Invalid category '{}', defaulting to STOCK", categoryStr);
+                        category = Asset.AssetCategory.STOCK;
+                    }
+                    
+                    // Parse purchase date
+                    LocalDate purchaseDate;
+                    try {
+                        String dateStr = assetData.getOrDefault("purchasedate", LocalDate.now().toString()).toString();
+                        try {
+                            purchaseDate = LocalDate.parse(dateStr);
+                        } catch (Exception e) {
+                            Instant instant = Instant.parse(dateStr);
+                            purchaseDate = instant.atZone(ZoneId.systemDefault()).toLocalDate();
+                        }
+                    } catch (Exception e) {
+                        log.warn("Could not parse purchase date, using today");
+                        purchaseDate = LocalDate.now();
+                    }
+                    
+                    String currency = assetData.containsKey("currency")
+                            ? assetData.get("currency").toString().toUpperCase().substring(0, Math.min(3, assetData.get("currency").toString().length()))
+                            : "USD";
+                    
+                    BigDecimal quantity = new BigDecimal(assetData.getOrDefault("quantity", "0").toString());
+                    BigDecimal buyingRate = new BigDecimal(assetData.getOrDefault("buyingrate", "0").toString());
+                    
+                    if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
+                        log.warn("Invalid quantity for symbol {}, skipping", assetData.get("symbol"));
+                        continue;
+                    }
+                    
+                    Asset asset = Asset.builder()
+                            .symbol(assetData.get("symbol").toString().toUpperCase())
+                            .quantity(quantity)
+                            .buyingRate(buyingRate)
+                            .category(category)
+                            .name(assetData.get("symbol").toString())
+                            .purchaseDate(purchaseDate)
+                            .currency(currency)
+                            .client(client)
+                            .createdAt(Instant.now())
+                            .build();
+                    assetRepository.save(asset);
+                    importedCount++;
+                    log.debug("Imported asset: {}", asset.getSymbol());
+                } catch (Exception e) {
+                    log.error("Error importing asset from CSV data: {}", assetData, e);
+                    continue;
+                }
+            }
+
+            log.info("Successfully imported {}/{} assets for clientId: {}", importedCount, assets.size(), clientId);
+            return importedCount;
+        } catch (Exception e) {
+            log.error("Error importing CSV for clientId: {}, userId: {}", clientId, userId, e);
+            throw e;
+        }
+    }
+
+    /**
+     * Parse a CSV line handling quoted values
+     */
+    private String[] parseCSVLine(String line) {
+        List<String> values = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean inQuotes = false;
+
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+            if (c == '"') {
+                inQuotes = !inQuotes;
+            } else if (c == ',' && !inQuotes) {
+                values.add(current.toString());
+                current = new StringBuilder();
+            } else {
+                current.append(c);
+            }
+        }
+        values.add(current.toString());
+        return values.toArray(new String[0]);
     }
 }

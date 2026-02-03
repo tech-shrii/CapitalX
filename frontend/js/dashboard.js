@@ -1,3 +1,6 @@
+let pieChart = null;
+let lineChart = null;
+let barChart = null;
 let refreshIntervalId = null;
 let isModalOpen = false;
 
@@ -11,11 +14,11 @@ document.addEventListener('DOMContentLoaded', () => {
     setupClientSwitcher();
     
     // Start auto-refresh only if no modal is open
-    refreshIntervalId = setInterval(() => {
+    /* refreshIntervalId = setInterval(() => {
         if (!isModalOpen) {
             refreshData();
         }
-    }, 10000); // Auto-refresh every 10 seconds
+    }, 10000); // Auto-refresh every 10 seconds */
     console.log('[DEBUG] Auto-refresh interval set:', refreshIntervalId);
 
     const addClientBtnHeader = document.getElementById('addClientBtnHeader');
@@ -76,15 +79,24 @@ function refreshData() {
     }
     
     const activeTab = document.querySelector('.nav a.active')?.getAttribute('data-tab');
-    console.log('[DEBUG] Active tab:', activeTab);
-    if (activeTab) {
+    console.log('[DEBUG] Active tab for refresh:', activeTab);
+    if (activeTab === 'dashboard') {
+        console.log('[DEBUG] Refreshing dashboard data only');
+        loadDashboardData();
+    } else if (activeTab) {
         console.log('[DEBUG] Loading tab:', activeTab);
         loadTab(activeTab);
     } else {
-        console.warn('[WARN] No active tab found');
+        console.warn('[WARN] No active tab found for refresh');
     }
 }
 
+
+function destroyCharts() {
+    if (pieChart) { pieChart.destroy(); pieChart = null; }
+    if (lineChart) { lineChart.destroy(); lineChart = null; }
+    if (barChart) { barChart.destroy(); barChart = null; }
+}
 
 function setupUser() {
     const userEmail = document.getElementById('userEmail');
@@ -113,6 +125,7 @@ async function loadTab(tab) {
     const assetCategories = ['stock', 'mutual_fund', 'bond', 'crypto', 'commodity', 'forex'];
 
     if (tab === 'dashboard') {
+        destroyCharts();
         const response = await fetch('dashboard-content.html');
         tabContent.innerHTML = await response.text();
         loadDashboardData();
@@ -147,111 +160,35 @@ async function loadTab(tab) {
 async function loadDashboardData() {
     try {
         const url = currentClientId === 'main' ? '/dashboard/summary' : `/clients/${currentClientId}/dashboard/summary`;
-        console.log('[DEBUG] loadDashboardData - currentClientId:', currentClientId);
         console.log('[DEBUG] loadDashboardData - URL:', url);
-        console.log('[DEBUG] loadDashboardData - Full URL:', `${window.API_BASE_URL}${url}`);
         
         const data = await apiCall(url);
         console.log('[DEBUG] Dashboard data received:', data);
         
-        const totalValueEl = document.getElementById('totalPortfolioValue');
-        const totalReturnsEl = document.getElementById('totalReturns');
-        const totalInvestmentEl = document.getElementById('totalInvestment');
-        
-        console.log('[DEBUG] DOM elements found:', {
-            totalPortfolioValue: !!totalValueEl,
-            totalReturns: !!totalReturnsEl,
-            totalInvestment: !!totalInvestmentEl
-        });
-        
-        // Get default currency from client or use USD
+        // Update summary cards
         const defaultCurrency = data.currency || 'USD';
-        
-        if (totalValueEl) {
-            totalValueEl.textContent = formatCurrency(data.totalCurrentValue || 0, defaultCurrency);
-        } else {
-            console.error('[ERROR] totalPortfolioValue element not found');
-        }
-        
-        if (totalReturnsEl) {
-            totalReturnsEl.textContent = formatCurrency(data.totalProfitLoss || 0, defaultCurrency);
-        } else {
-            console.error('[ERROR] totalReturns element not found');
-        }
-        
-        if (totalInvestmentEl) {
-            totalInvestmentEl.textContent = formatCurrency(data.totalInvested || 0, defaultCurrency);
-        } else {
-            console.error('[ERROR] totalInvestment element not found');
-        }
+        document.getElementById('totalPortfolioValue').textContent = formatCurrency(data.totalCurrentValue || 0, defaultCurrency);
+        document.getElementById('totalReturns').textContent = formatCurrency(data.totalProfitLoss || 0, defaultCurrency);
+        document.getElementById('totalInvestment').textContent = formatCurrency(data.totalInvested || 0, defaultCurrency);
         
         const pnl = data.totalProfitLoss || 0;
         const pnlPercent = data.totalProfitLossPercent || 0;
         const totalReturnsPercentage = document.getElementById('totalReturnsPercentage');
         totalReturnsPercentage.textContent = `${formatPercent(pnlPercent)} overall return`;
-        if(pnl >= 0) {
-            totalReturnsPercentage.classList.add('positive');
-        } else {
-            totalReturnsPercentage.classList.add('negative');
-        }
+        totalReturnsPercentage.classList.toggle('positive', pnl >= 0);
+        totalReturnsPercentage.classList.toggle('negative', pnl < 0);
 
-        // Asset Allocation Pie Chart
-        console.log('[DEBUG] assetAllocation:', data.assetAllocation);
-        if (data.assetAllocation && Object.keys(data.assetAllocation).length > 0) {
-            const pieCtx = document.getElementById('pie');
-            if (pieCtx) {
-                const pieChart = new Chart(pieCtx.getContext('2d'), {
-                    type: 'pie',
-                    data: {
-                        labels: Object.keys(data.assetAllocation),
-                        datasets: [{
-                            data: Object.values(data.assetAllocation).map(v => Number(v)),
-                            backgroundColor: ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444', '#64748b'],
-                        }]
-                    }
-                });
-                console.log('[DEBUG] Pie chart created');
-            } else {
-                console.error('[ERROR] Pie chart canvas not found');
-            }
-        } else {
-            console.warn('[WARN] No asset allocation data');
-        }
+        // Update charts
+        updatePieChart(data.assetAllocation);
+        updateLineChart(data.portfolioPerformance);
+        updateBarChart(data.assetCategoryBreakdown);
 
-        // Portfolio Performance Line Chart
-        console.log('[DEBUG] portfolioPerformance:', data.portfolioPerformance);
-        if (data.portfolioPerformance && data.portfolioPerformance.labels && data.portfolioPerformance.data) {
-            const lineCtx = document.getElementById('line');
-            if (lineCtx) {
-                const lineChart = new Chart(lineCtx.getContext('2d'), {
-                    type: 'line',
-                    data: {
-                        labels: data.portfolioPerformance.labels,
-                        datasets: [{
-                            label: 'Portfolio Value',
-                            data: data.portfolioPerformance.data.map(v => Number(v)),
-                            borderColor: '#2563eb',
-                            tension: .4,
-                            fill: false
-                        }]
-                    }
-                });
-                console.log('[DEBUG] Line chart created');
-            } else {
-                console.error('[ERROR] Line chart canvas not found');
-            }
-        } else {
-            console.warn('[WARN] No portfolio performance data');
-        }
-
-        // Top Performing Assets Table
-        console.log('[DEBUG] topAssets:', data.topAssets);
-        if (data.topAssets && data.topAssets.length > 0) {
-            const topAssetsTable = document.getElementById('topAssetsTable');
-            if (topAssetsTable) {
-                const tbody = topAssetsTable.getElementsByTagName('tbody')[0];
-                if (tbody) {
-                    const defaultCurrency = data.currency || 'USD';
+        // Update Top Performing Assets Table
+        const topAssetsTable = document.getElementById('topAssetsTable');
+        if (topAssetsTable) {
+            const tbody = topAssetsTable.getElementsByTagName('tbody')[0];
+            if (tbody) {
+                if (data.topAssets && data.topAssets.length > 0) {
                     tbody.innerHTML = data.topAssets.map(asset => `
                         <tr>
                             <td>${asset.name || 'N/A'}</td>
@@ -260,68 +197,99 @@ async function loadDashboardData() {
                             <td class="right ${(asset.returns || 0) >= 0 ? 'positive' : 'negative'}">${formatPercent(asset.returns || 0)}</td>
                         </tr>
                     `).join('');
-                    console.log('[DEBUG] Top assets table populated');
                 } else {
-                    console.error('[ERROR] Top assets table tbody not found');
-                }
-            } else {
-                console.error('[ERROR] Top assets table not found');
-            }
-        } else {
-            console.warn('[WARN] No top assets data');
-            const topAssetsTable = document.getElementById('topAssetsTable');
-            if (topAssetsTable) {
-                const tbody = topAssetsTable.getElementsByTagName('tbody')[0];
-                if (tbody) {
                     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No assets found</td></tr>';
                 }
             }
         }
 
-        // Asset Category Breakdown Bar Chart
-        console.log('[DEBUG] assetCategoryBreakdown:', data.assetCategoryBreakdown);
-        if (data.assetCategoryBreakdown && Object.keys(data.assetCategoryBreakdown).length > 0) {
-            const barCtx = document.getElementById('bar');
-            if (barCtx) {
-                const barChart = new Chart(barCtx.getContext('2d'), {
-                    type: 'bar',
-                    data: {
-                        labels: Object.keys(data.assetCategoryBreakdown),
-                        datasets: [{
-                            label: 'Value',
-                            data: Object.values(data.assetCategoryBreakdown).map(v => Number(v)),
-                            backgroundColor: '#3b82f6'
-                        }]
-                    }
-                });
-                console.log('[DEBUG] Bar chart created');
-            } else {
-                console.error('[ERROR] Bar chart canvas not found');
-            }
-        } else {
-            console.warn('[WARN] No category breakdown data');
-        }
-
     } catch (error) {
         console.error('[ERROR] Error loading dashboard data:', error);
-        console.error('[ERROR] Error message:', error.message);
-        console.error('[ERROR] Error stack:', error.stack);
-        console.error('[ERROR] Current clientId:', currentClientId);
-        
-        // Show user-friendly error message
-        const errorContainer = document.getElementById('tab-content');
-        if (errorContainer) {
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'card';
-            errorDiv.style.color = 'red';
-            errorDiv.innerHTML = `
-                <h2>Error Loading Dashboard</h2>
-                <p><strong>Error:</strong> ${error.message}</p>
-                <p><strong>URL:</strong> ${window.API_BASE_URL}${currentClientId === 'main' ? '/dashboard/summary' : `/clients/${currentClientId}/dashboard/summary`}</p>
-                <p>Please check the console for more details.</p>
-            `;
-            errorContainer.appendChild(errorDiv);
-        }
+    }
+}
+
+function updatePieChart(assetAllocation) {
+    const pieCtx = document.getElementById('pie');
+    if (!pieCtx) return;
+
+    const labels = Object.keys(assetAllocation || {});
+    const data = Object.values(assetAllocation || {}).map(v => Number(v));
+
+    if (pieChart) {
+        pieChart.data.labels = labels;
+        pieChart.data.datasets[0].data = data;
+        pieChart.update();
+        console.log('[DEBUG] Pie chart updated');
+    } else {
+        pieChart = new Chart(pieCtx.getContext('2d'), {
+            type: 'pie',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    backgroundColor: ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444', '#64748b'],
+                }]
+            }
+        });
+        console.log('[DEBUG] Pie chart created');
+    }
+}
+
+function updateLineChart(portfolioPerformance) {
+    const lineCtx = document.getElementById('line');
+    if (!lineCtx) return;
+
+    const labels = portfolioPerformance?.labels || [];
+    const data = portfolioPerformance?.data?.map(v => Number(v)) || [];
+
+    if (lineChart) {
+        lineChart.data.labels = labels;
+        lineChart.data.datasets[0].data = data;
+        lineChart.update();
+        console.log('[DEBUG] Line chart updated');
+    } else {
+        lineChart = new Chart(lineCtx.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Portfolio Value',
+                    data: data,
+                    borderColor: '#2563eb',
+                    tension: .4,
+                    fill: false
+                }]
+            }
+        });
+        console.log('[DEBUG] Line chart created');
+    }
+}
+
+function updateBarChart(assetCategoryBreakdown) {
+    const barCtx = document.getElementById('bar');
+    if (!barCtx) return;
+
+    const labels = Object.keys(assetCategoryBreakdown || {});
+    const data = Object.values(assetCategoryBreakdown || {}).map(v => Number(v));
+
+    if (barChart) {
+        barChart.data.labels = labels;
+        barChart.data.datasets[0].data = data;
+        barChart.update();
+        console.log('[DEBUG] Bar chart updated');
+    } else {
+        barChart = new Chart(barCtx.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Value',
+                    data: data,
+                    backgroundColor: '#3b82f6'
+                }]
+            }
+        });
+        console.log('[DEBUG] Bar chart created');
     }
 }
 

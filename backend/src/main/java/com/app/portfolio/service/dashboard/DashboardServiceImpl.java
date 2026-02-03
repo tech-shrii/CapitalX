@@ -112,9 +112,38 @@ public class DashboardServiceImpl implements DashboardService {
                     .limit(5)
                     .collect(Collectors.toList());
 
-            // Portfolio performance (simplified - just current value for now)
-            List<String> labels = Arrays.asList("Today");
-            List<BigDecimal> performanceData = Arrays.asList(totalCurrentValue);
+            // Portfolio performance
+            Map<String, Double> portfolioMap = allAssets.stream()
+                .filter(asset -> asset.getSymbol() != null && !asset.getSymbol().isEmpty())
+                .collect(Collectors.toMap(
+                    Asset::getSymbol,
+                    asset -> asset.getQuantity().doubleValue(),
+                    Double::sum
+                ));
+
+            List<String> labels;
+            List<BigDecimal> performanceData;
+
+            if (!portfolioMap.isEmpty()) {
+                com.app.portfolio.dto.pricing.PortfolioChartResponse portfolioChart =
+                    pricingService.getPortfolioChart(portfolioMap, "6m", "1wk");
+
+                if (portfolioChart != null && portfolioChart.getData() != null && !portfolioChart.getData().isEmpty()) {
+                    labels = portfolioChart.getData().stream()
+                                    .map(com.app.portfolio.dto.pricing.PortfolioChartDataPoint::getTime)
+                                    .collect(Collectors.toList());
+                    performanceData = portfolioChart.getData().stream()
+                                    .map(p -> BigDecimal.valueOf(p.getValue()))
+                                    .collect(Collectors.toList());
+                } else {
+                    // Fallback to simplified data
+                    labels = Arrays.asList("Today");
+                    performanceData = Arrays.asList(totalCurrentValue);
+                }
+            } else {
+                labels = Collections.emptyList();
+                performanceData = Collections.emptyList();
+            }
 
             DashboardSummaryResponse response = DashboardSummaryResponse.builder()
                     .totalClients((long) clients.size())
@@ -207,9 +236,38 @@ public class DashboardServiceImpl implements DashboardService {
                     .limit(5)
                     .collect(Collectors.toList());
 
-            // Portfolio performance (simplified)
-            List<String> labels = Arrays.asList("Today");
-            List<BigDecimal> performanceData = Arrays.asList(totalCurrentValue);
+            // Portfolio performance
+            Map<String, Double> portfolioMap = assets.stream()
+                .filter(asset -> asset.getSymbol() != null && !asset.getSymbol().isEmpty())
+                .collect(Collectors.toMap(
+                    Asset::getSymbol,
+                    asset -> asset.getQuantity().doubleValue(),
+                    Double::sum
+                ));
+
+            List<String> labels;
+            List<BigDecimal> performanceData;
+            
+            if (!portfolioMap.isEmpty()) {
+                com.app.portfolio.dto.pricing.PortfolioChartResponse portfolioChart = 
+                    pricingService.getPortfolioChart(portfolioMap, "6m", "1wk");
+
+                if (portfolioChart != null && portfolioChart.getData() != null && !portfolioChart.getData().isEmpty()) {
+                    labels = portfolioChart.getData().stream()
+                                    .map(com.app.portfolio.dto.pricing.PortfolioChartDataPoint::getTime)
+                                    .collect(Collectors.toList());
+                    performanceData = portfolioChart.getData().stream()
+                                    .map(p -> BigDecimal.valueOf(p.getValue()))
+                                    .collect(Collectors.toList());
+                } else {
+                    // Fallback to simplified data
+                    labels = Arrays.asList("Today");
+                    performanceData = Arrays.asList(totalCurrentValue);
+                }
+            } else {
+                labels = Collections.emptyList();
+                performanceData = Collections.emptyList();
+            }
 
             DashboardSummaryResponse response = DashboardSummaryResponse.builder()
                     .totalClients(1L)

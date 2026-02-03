@@ -403,7 +403,7 @@ public class AssetServiceImpl implements AssetService {
             int importedCount = 0;
             for (Map<String, Object> assetData : assets) {
                 try {
-                    String categoryStr = assetData.getOrDefault("assettype", "STOCK").toString().toUpperCase();
+                    String categoryStr = assetData.getOrDefault("category", "STOCK").toString().toUpperCase();
                     Asset.AssetCategory category;
                     try {
                         category = Asset.AssetCategory.valueOf(categoryStr);

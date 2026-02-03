@@ -1,673 +1,1053 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
-from functools import lru_cache
-import yfinance as yf
-from datetime import datetime, timedelta
+import sys
 import asyncio
-from typing import List, Dict, Optional, Any
-from pydantic import BaseModel
-import json
-import time
+
+if sys.platform.startswith("win"):
+    asyncio.set_event_loop_policy(
+        asyncio.WindowsSelectorEventLoopPolicy()
+    )
+
+"""
+Pricing Service  —  FastAPI
+============================
+Data-source priority (every endpoint):
+    1  Stooq CSV endpoint   – no auth, no JS, plain CSV over HTTPS.
+    2  yfinance             – last-resort fallback (unchanged from original).
+
+Why Stooq replaced Yahoo
+-------------------------
+* No crumb / cookie dance.
+* No rate-limit 429s on the chart endpoint.
+* No React SPA that hides prices behind client-side JS.
+* Returns raw OHLCV CSV that pandas reads in one line.
+
+Symbol translation
+------------------
+Clients send Yahoo-style tickers (AAPL, HSBA.L, 7203.T, RELIANCE.NS).
+yahoo_to_stooq() converts them to Stooq format before the HTTP call.
+
+Caching
+-------
+Stooq enforces a per-IP daily download cap.  A short-lived in-memory cache
+(default TTL = 300 s) keeps repeated requests for the same symbol fast and
+avoids burning the quota.  The cache is keyed on the Stooq symbol only;
+period slicing happens *after* the cache hit.
+"""
+
 import logging
 import os
-import pandas as pd
+import time
+import threading
+from datetime import datetime, timedelta
+from functools import lru_cache
+from io import StringIO
+from typing import Any, Dict, List, Optional
 
-# Configure logging
+import pandas as pd
+import yfinance as yf
+from playwright.async_api import async_playwright
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configure yfinance cache location (persistent cache)
-# Note: yfinance 1.1.0+ uses curl_cffi internally and handles its own session management
-# We should NOT pass a custom session as it conflicts with curl_cffi
+# ---------------------------------------------------------------------------
+# yfinance persistent cache (kept for the fallback layer)
+# ---------------------------------------------------------------------------
 cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "py-yfinance")
 os.makedirs(cache_dir, exist_ok=True)
 try:
     yf.set_tz_cache_location(cache_dir)
     logger.info(f"yfinance cache location set to: {cache_dir}")
 except Exception as e:
-    logger.warning(f"Could not set cache location: {e}")
+    logger.warning(f"Could not set yfinance cache location: {e}")
 
-app = FastAPI(title="Pricing Service", version="1.0.0")
+# ---------------------------------------------------------------------------
+# FastAPI app
+# ---------------------------------------------------------------------------
+app = FastAPI(title="Pricing Service", version="3.0.0")
 
-# Pydantic models for request/response
-class BulkChartsRequest(BaseModel):
-    symbols: List[str]
-    period: Optional[str] = "6mo"
-    interval: Optional[str] = None
 
-# Helper function to batch download multiple symbols at once
-def batch_download_prices(symbols: List[str], period: str = "1d", max_retries: int = 2):
-    """Batch download prices for multiple symbols using yf.download() - much more efficient"""
-    if not symbols:
-        return {}
-    
-    symbols_clean = [s.upper().strip() for s in symbols if s and s.strip()]
-    if not symbols_clean:
-        return {}
-    
-    last_error = None
-    for attempt in range(max_retries):
+@app.on_event("shutdown")
+async def _shutdown_playwright():
+    """Signal the background thread to stop and wait for clean exit."""
+    _pw_browser.close()
+    logger.info("Playwright browser closed on shutdown.")
+
+
+# ===========================================================================
+# 1.  SYMBOL TRANSLATION  —  Yahoo-style  →  Stooq-style
+# ===========================================================================
+# Stooq suffix conventions differ from Yahoo.  This map covers every
+# suffix that has appeared in the test suite plus the most common global
+# exchanges.  Anything not in the map defaults to ".us" (safe for bare
+# US tickers like "AAPL").
+#
+# Yahoo  →  Stooq
+# -----     -----
+# (none)    .us        bare US ticker
+# .L        .uk        London Stock Exchange
+# .T        .jp        Tokyo Stock Exchange
+# .NS       .ns        National Stock Exchange (India)
+# .BO       .bo        Bombay Stock Exchange (India)
+# .HK       .hk        Hong Kong
+# .PA       .fr        Paris (Euronext)
+# .AS       .nl        Amsterdam (Euronext)
+# .BR       .br        Brussels (Euronext)
+# .MI       .it        Milan
+# .TO       .ca        Toronto
+# .AX       .au        Australia
+# .KS       .kr        Korea
+# .SI       .sg        Singapore
+# .F        .de        Frankfurt (fallback; many DE stocks also .DE → .de)
+# .DE       .de        Frankfurt / Xetra
+# ---------------------------------------------------------------------------
+
+_YAHOO_TO_STOOQ_SUFFIX: Dict[str, str] = {
+    ".l":  ".uk",
+    ".t":  ".jp",
+    ".ns": ".ns",
+    ".bo": ".bo",
+    ".hk": ".hk",
+    ".pa": ".fr",
+    ".as": ".nl",
+    ".br": ".br",
+    ".mi": ".it",
+    ".to": ".ca",
+    ".ax": ".au",
+    ".ks": ".kr",
+    ".si": ".sg",
+    ".f":  ".de",
+    ".de": ".de",
+}
+
+
+def yahoo_to_stooq(symbol: str) -> str:
+    """
+    Convert a Yahoo-style ticker to the Stooq symbol that the CSV
+    endpoint expects.  Always returns lowercase (Stooq convention).
+
+    Examples
+    --------
+    >>> yahoo_to_stooq("AAPL")
+    'aapl.us'
+    >>> yahoo_to_stooq("HSBA.L")
+    'hsba.uk'
+    >>> yahoo_to_stooq("7203.T")
+    '7203.jp'
+    >>> yahoo_to_stooq("RELIANCE.NS")
+    'reliance.ns'
+    """
+    symbol = symbol.strip()
+
+    # Split on the LAST dot so numeric tickers like "7203.T" work correctly.
+    dot_pos = symbol.rfind(".")
+    if dot_pos != -1:
+        base   = symbol[:dot_pos]
+        suffix = symbol[dot_pos:].lower()          # e.g. ".l"
+        stooq_suffix = _YAHOO_TO_STOOQ_SUFFIX.get(suffix)
+        if stooq_suffix:
+            return f"{base.lower()}{stooq_suffix}"
+        # Unknown suffix — keep it as-is (lowercased).  Stooq may still
+        # recognise it.
+        return symbol.lower()
+
+    # No dot at all → bare US ticker.
+    return f"{symbol.lower()}.us"
+
+
+# ===========================================================================
+# 2.  STOOQ CLIENT  —  session, rate-limiter, in-memory cache
+# ===========================================================================
+
+_STOOQ_CSV_URL = "https://stooq.com/q/d/l/"
+
+# How many seconds a cached DataFrame stays valid before we re-fetch.
+_CACHE_TTL_SECONDS: int = 300          # 5 minutes
+
+# Minimum gap (seconds) between outgoing requests to Stooq.
+_MIN_REQUEST_INTERVAL: float = 1.0
+
+
+_BLOCKED_RESOURCE_TYPES = {"image", "stylesheet", "font", "media", "ping"}
+
+
+class _PlaywrightBrowser:
+    """
+    Runs an async Playwright browser on a DEDICATED background thread
+    with its own asyncio event loop.
+
+    Why a separate thread?
+        FastAPI / uvicorn owns the main event loop.
+        • sync_playwright() cannot nest inside it (Error A).
+        • On Windows, the main loop may be a SelectorEventLoop which
+          cannot spawn subprocesses (Error B).
+        A private thread with asyncio.new_event_loop() sidesteps both.
+
+    Public API (called from any thread):
+        fetch_text(url) -> str      blocking, thread-safe
+        close()                     graceful shutdown
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+
+        # The background thread and its private event loop.
+        self._loop:   Optional[asyncio.AbstractEventLoop] = None
+        self._thread: Optional[threading.Thread]          = None
+
+        # Playwright objects — only touched from the background loop.
+        self._pw       = None
+        self._browser  = None
+        self._context  = None
+        self._page     = None
+
+        # Signals the background thread to exit its loop.
+        self._stop_event = threading.Event()
+
+    # ------------------------------------------------------------------
+    # Background-thread lifecycle
+    # ------------------------------------------------------------------
+    def _thread_target(self) -> None:
+        """Entry point for the background thread.  Runs forever until
+        _stop_event is set."""
+        # Force ProactorEventLoop on Windows — required for subprocess.
+        import sys
+        if sys.platform == "win32":
+            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
         try:
-            if attempt > 0:
-                delay = min(2 ** attempt, 10)
-                logger.info(f"Retrying batch download (attempt {attempt + 1}/{max_retries}) after {delay}s")
-                time.sleep(delay)
-            
-            # Use yf.download() for batch fetching - much faster than individual calls
-            # Note: Do NOT pass session parameter - yfinance handles its own session with curl_cffi
-            logger.info(f"Batch downloading {len(symbols_clean)} symbols: {', '.join(symbols_clean[:5])}{'...' if len(symbols_clean) > 5 else ''}")
-            
-            # Download with group_by='ticker' to get separate DataFrames per symbol
-            df = yf.download(symbols_clean, period=period, progress=False, threads=True)
-            
-            if df.empty:
-                raise ValueError("Empty DataFrame returned from batch download")
-            
-            results = {}
-            if isinstance(df.columns, pd.MultiIndex):
-                for symbol in symbols_clean:
-                    try:
-                        if ('Close', symbol) in df.columns:
-                            price = df[('Close', symbol)].iloc[-1]
-                            if pd.notna(price):
-                                results[symbol] = {
-                                    "price": float(price),
-                                    "timestamp": df.index[-1].isoformat() if hasattr(df.index[-1], 'isoformat') else str(df.index[-1])
-                                }
-                    except Exception as e:
-                        logger.debug(f"Could not extract {symbol} from MultiIndex: {e}")
-                        continue
+            self._loop.run_until_complete(self._async_launch())
+            logger.info("Playwright browser ready (background thread).")
+            # Keep the loop alive until told to stop.
+            self._loop.run_until_complete(self._wait_for_stop())
+        finally:
+            self._loop.run_until_complete(self._async_close())
+            self._loop.close()
+            logger.info("Playwright background thread exited.")
+
+    async def _wait_for_stop(self) -> None:
+        """Poll _stop_event without blocking the event loop."""
+        while not self._stop_event.is_set():
+            await asyncio.sleep(0.2)
+
+    # ------------------------------------------------------------------
+    # Async helpers — only called inside the background loop
+    # ------------------------------------------------------------------
+    async def _async_launch(self) -> None:
+        self._pw      = await async_playwright().start()
+        self._browser = await self._pw.chromium.launch(headless=True)
+        self._context = await self._browser.new_context(
+            viewport={"width": 1280, "height": 800},
+            accept_downloads=True,                  # Stooq CSV comes as an attachment
+        )
+        # Stealth: hide navigator.webdriver
+        await self._context.add_init_script(
+            "Object.defineProperty(navigator, 'webdriver', "
+            "{ get: () => undefined })"
+        )
+        # Block heavy resources we never need.
+        async def _block(route):
+            if route.request.resource_type in _BLOCKED_RESOURCE_TYPES:
+                await route.abort()
             else:
-                # Single symbol case
-                if 'Close' in df.columns and len(symbols_clean) == 1:
-                    results[symbols_clean[0]] = {
-                        "price": float(df['Close'].iloc[-1]),
-                        "timestamp": df.index[-1].isoformat() if hasattr(df.index[-1], 'isoformat') else str(df.index[-1])
-                    }
-            
-            logger.info(f"Successfully batch downloaded {len(results)}/{len(symbols_clean)} symbols")
-            return results
-            
-        except Exception as e:
-            error_msg = str(e)
-            last_error = error_msg
-            logger.warning(f"Batch download failed (attempt {attempt + 1}/{max_retries}): {error_msg}")
-            if attempt < max_retries - 1:
-                continue
-    
-    logger.error(f"Batch download failed after {max_retries} attempts: {last_error}")
-    # Fallback: try individual fetches for critical symbols
-    logger.info("Falling back to individual fetches...")
-    results = {}
-    for symbol in symbols_clean[:10]:  # Limit fallback to first 10 to avoid timeout
+                await route.continue_()
+
+        await self._context.route("**/*", _block)
+        self._page = await self._context.new_page()
+
+    async def _async_fetch(self, url: str) -> str:
+        """
+        Fetch *url* and return the body as a string.
+
+        Stooq's /q/d/l/ endpoint returns
+            Content-Disposition: attachment; filename="…"
+        which makes Chromium treat it as a file download, not a page
+        navigation.  page.goto() aborts immediately with "Download is
+        starting" in that case.
+
+        expect_download() is the correct Playwright API for this:
+        it captures the Download object, and read_text() pulls the
+        CSV body without ever writing to disk.
+        """
+        async with self._page.expect_download() as download_info:
+            # goto() will "fail" (not commit the navigation) — that is
+            # expected and fine; expect_download() catches the download
+            # event that fires instead.
+            await self._page.goto(url)
+
+        download = await download_info.value
+        text = await download.read_text()          # CSV body as str, no disk I/O
+        await download.delete()                    # clean up the temp handle
+
+        await asyncio.sleep(_MIN_REQUEST_INTERVAL) # honour Stooq rate limit
+        return text
+
+    async def _async_close(self) -> None:
         try:
-            data = fetch_ticker_data(symbol, period=period, interval="1d", max_retries=1)
-            results[symbol] = {
-                "price": float(data["Close"].iloc[-1]),
-                "timestamp": data.index[-1].isoformat() if hasattr(data.index[-1], 'isoformat') else str(data.index[-1])
+            if self._page    and not self._page.is_closed():    await self._page.close()
+            if self._context: await self._context.close()
+            if self._browser and not self._browser.is_closed(): await self._browser.close()
+            if self._pw:      await self._pw.stop()
+        except Exception as exc:
+            logger.warning("Playwright async close error (harmless): %s", exc)
+
+    # ------------------------------------------------------------------
+    # Public — called from the main / FastAPI thread
+    # ------------------------------------------------------------------
+    def _ensure_started(self) -> None:
+        """Start the background thread + browser if not already running."""
+        if self._thread and self._thread.is_alive():
+            return
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._thread_target, daemon=True)
+        self._thread.start()
+        # Wait until the loop is ready (launch completes).
+        # _async_launch sets self._page; poll until it appears.
+        deadline = time.time() + 15          # 15 s max wait for launch
+        while self._page is None and time.time() < deadline:
+            time.sleep(0.1)
+        if self._page is None:
+            raise RuntimeError("Playwright browser failed to launch within 15 s")
+
+    def fetch_text(self, url: str) -> str:
+        """
+        Blocking, thread-safe fetch.  Submits _async_fetch into the
+        background event loop and waits for the result.
+        """
+        with self._lock:
+            self._ensure_started()
+            future = asyncio.run_coroutine_threadsafe(
+                self._async_fetch(url), self._loop
+            )
+            # 30 s timeout per fetch — more than enough for a CSV.
+            return future.result(timeout=30)
+
+    def close(self) -> None:
+        """Signal background thread to shut down and wait for it."""
+        self._stop_event.set()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=10)
+        self._thread  = None
+        self._loop    = None
+        self._page    = None
+        self._browser = None
+        self._context = None
+        self._pw      = None
+
+
+# Process-level singleton — browser is lazy-launched on first fetch_text() call.
+_pw_browser = _PlaywrightBrowser()
+
+
+# ---------------------------------------------------------------------------
+# Stooq client  —  cache layer on top of the Playwright transport.
+# ---------------------------------------------------------------------------
+
+
+class _StooqClient:
+    """
+    Thread-safe singleton that owns:
+        • an in-memory cache: stooq_symbol → (DataFrame, fetched_at)
+
+    Network I/O is delegated to _pw_browser (Playwright).  The cache
+    logic is identical to the previous requests-based version.
+    """
+
+    def __init__(self) -> None:
+        self._lock  = threading.Lock()
+        # cache: { stooq_symbol: (pd.DataFrame, epoch_fetched) }
+        self._cache: Dict[str, tuple[pd.DataFrame, float]] = {}
+
+    async def fetch_daily(self, stooq_symbol: str, d1: str, d2: str) -> pd.DataFrame:
+        """
+        Return a DataFrame [Date, Open, High, Low, Close, Volume] sorted
+        ascending.  Cache-first; network on miss / stale.
+        """
+        with self._lock:
+            # --- cache check -----------------------------------------------
+            if stooq_symbol in self._cache:
+                cached_df, fetched_at = self._cache[stooq_symbol]
+                if (time.time() - fetched_at) < _CACHE_TTL_SECONDS:
+                    sliced = cached_df[
+                        (cached_df["Date"] >= d1) & (cached_df["Date"] <= d2)
+                    ].copy()
+                    if not sliced.empty:
+                        logger.debug("Cache hit for %s", stooq_symbol)
+                        return sliced
+
+            # --- network fetch via Playwright --------------------------------
+            url = (
+                f"{_STOOQ_CSV_URL}?s={stooq_symbol}"
+                f"&d1={d1}&d2={d2}&i=d"
+            )
+            logger.info("Stooq fetch (Playwright): %s", url)
+
+            try:
+                text = await _pw_browser.fetch_text(url)
+            except Exception as exc:
+                raise ValueError(
+                    f"Playwright fetch failed for '{stooq_symbol}': {exc}"
+                ) from exc
+
+            # --- parse CSV -------------------------------------------------
+            text = text.strip()
+            if not text or text.startswith("No"):
+                raise ValueError(f"Stooq: no data for symbol '{stooq_symbol}'")
+
+            df = pd.read_csv(StringIO(text))
+            df.columns = [c.strip() for c in df.columns]
+
+            if "Date" not in df.columns or "Close" not in df.columns:
+                raise ValueError(
+                    f"Stooq CSV missing expected columns for '{stooq_symbol}'. "
+                    f"Got: {list(df.columns)}"
+                )
+
+            if df.empty:
+                raise ValueError(f"Stooq: empty dataset for '{stooq_symbol}'")
+
+            df["Date"] = pd.to_datetime(df["Date"])
+            df = df.sort_values("Date").reset_index(drop=True)
+
+            for col in ("Open", "High", "Low", "Close"):
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+            df["Volume"] = pd.to_numeric(df["Volume"], errors="coerce").fillna(0).astype(int)
+
+            # --- update cache ----------------------------------------------
+            self._cache[stooq_symbol] = (df, time.time())
+
+            logger.info(
+                "Stooq fetched %d rows for %s (%s → %s)",
+                len(df), stooq_symbol,
+                df["Date"].iloc[0].date(), df["Date"].iloc[-1].date(),
+            )
+            return df
+
+
+# Process-level singleton.
+_stooq = _StooqClient()
+
+
+# ===========================================================================
+# 3.  PERIOD  →  date-range helpers
+# ===========================================================================
+# How many *calendar* days back each user-facing period maps to.
+# We over-fetch slightly so that after weekends / holidays we still
+# get the right number of *trading* rows.
+
+_PERIOD_DAYS: Dict[str, int] = {
+    "1d":  5,       # 1 trading day  — fetch 5 cal days to be safe
+    "5d":  10,
+    "1w":  10,
+    "1mo": 35,
+    "3mo": 100,
+    "6mo": 200,
+    "1y":  400,
+    "5y":  2000,
+    "max": 7500,    # ~20 years
+}
+
+# How many rows to keep *after* the CSV is fetched, per period.
+# This normalises the output to a predictable size regardless of
+# how many holidays fell in the window.
+_PERIOD_ROWS: Dict[str, int] = {
+    "1d":  1,
+    "5d":  5,
+    "1w":  5,
+    "1mo": 22,
+    "3mo": 63,
+    "6mo": 126,
+    "1y":  252,
+    "5y":  1260,
+    "max": 99999,   # no cap
+}
+
+
+def _date_range(period: str) -> tuple[str, str]:
+    """Return (d1, d2) as YYYYMMDD strings for the given period."""
+    now  = datetime.now()
+    days = _PERIOD_DAYS.get(period.lower(), 200)
+    d1   = (now - timedelta(days=days)).strftime("%Y%m%d")
+    d2   = now.strftime("%Y%m%d")
+    return d1, d2
+
+
+# ===========================================================================
+# 4.  HIGH-LEVEL SCRAPE FUNCTIONS  (Stooq → yfinance fallback)
+# ===========================================================================
+
+
+async def scrape_price(symbol: str) -> Dict[str, Any]:
+    """
+    Get the latest price for *symbol*.
+
+    Tries Stooq first (last row of the 5-day CSV).  Falls back to
+    yfinance if Stooq fails for any reason.
+
+    Returns
+    -------
+    dict with keys: symbol, price, timestamp, currency, change, change_pct
+    """
+    stooq_sym = yahoo_to_stooq(symbol)
+
+    # --- attempt 1: Stooq --------------------------------------------------
+    try:
+        d1, d2 = _date_range("5d")
+        df = await _stooq.fetch_daily(stooq_sym, d1, d2)
+
+        latest = df.iloc[-1]
+        price  = float(latest["Close"])
+
+        # Compute 1-day change if we have ≥2 rows.
+        change     = 0.0
+        change_pct = 0.0
+        if len(df) >= 2:
+            prev_close = float(df.iloc[-2]["Close"])
+            if prev_close != 0:
+                change     = round(price - prev_close, 2)
+                change_pct = round((change / prev_close) * 100, 2)
+
+        timestamp = latest["Date"].strftime("%Y-%m-%dT%H:%M:%S")
+
+        logger.info("[Stooq] price for %s: %.2f", symbol.upper(), price)
+        return {
+            "symbol":      symbol.upper(),
+            "price":       price,
+            "change":      change,
+            "change_pct":  change_pct,
+            "currency":    "USD",          # Stooq doesn't expose currency;
+                                           # default USD is correct for .us
+            "company_name": "",
+            "timestamp":   timestamp,
+        }
+    except Exception as exc:
+        logger.warning("[Stooq] price failed for %s: %s — trying yfinance", symbol, exc)
+
+    # --- attempt 2: yfinance -----------------------------------------------
+    try:
+        ticker = yf.Ticker(symbol)
+        info   = ticker.info
+        price  = (
+            info.get("currentPrice")
+            or info.get("regularMarketPrice")
+            or info.get("previousClose")
+        )
+        if price is not None:
+            ts_raw = info.get("regularMarketTime")
+            timestamp = (
+                datetime.fromtimestamp(ts_raw).isoformat()
+                if isinstance(ts_raw, (int, float))
+                else datetime.now().isoformat()
+            )
+            logger.info("[yfinance] price for %s: %.2f", symbol.upper(), float(price))
+            return {
+                "symbol":      symbol.upper(),
+                "price":       float(price),
+                "change":      0.0,
+                "change_pct":  0.0,
+                "currency":    info.get("currency", "USD"),
+                "company_name": info.get("shortName", ""),
+                "timestamp":   timestamp,
             }
-            time.sleep(0.3)
-        except:
-            pass
-    return results
+
+        # info had no price — pull one row of history.
+        hist = ticker.history(period="1d", interval="1d")
+        if not hist.empty:
+            logger.info("[yfinance] price (history) for %s: %.2f", symbol.upper(), float(hist["Close"].iloc[-1]))
+            return {
+                "symbol":      symbol.upper(),
+                "price":       float(hist["Close"].iloc[-1]),
+                "change":      0.0,
+                "change_pct":  0.0,
+                "currency":    "USD",
+                "company_name": "",
+                "timestamp":   hist.index[-1].isoformat(),
+            }
+    except Exception as exc:
+        logger.warning("[yfinance] price failed for %s: %s", symbol, exc)
+
+    raise ValueError(f"All data sources failed for {symbol}")
+
+
+async def scrape_chart(symbol: str, period: str = "6mo", interval: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Get OHLCV chart data for *symbol* over *period*.
+
+    Stooq only exposes daily / weekly / monthly CSV.  We always fetch
+    daily and let the caller slice.  *interval* is accepted for API
+    compatibility but Stooq daily is always used as the base; if the
+    caller wants weekly we down-sample here.
+
+    Falls back to yfinance if Stooq fails.
+    """
+    stooq_sym = yahoo_to_stooq(symbol)
+    period_lower = period.lower()
+
+    # --- attempt 1: Stooq --------------------------------------------------
+    try:
+        d1, d2 = _date_range(period_lower)
+        df = await _stooq.fetch_daily(stooq_sym, d1, d2)
+
+        # Trim to the expected row count for this period.
+        max_rows = _PERIOD_ROWS.get(period_lower, len(df))
+        df = df.tail(max_rows).reset_index(drop=True)
+
+        # --- optional weekly down-sample ------------------------------------
+        # If the caller explicitly asked for weekly (or the period is ≥ 6mo
+        # and no interval override), keep daily.  We only down-sample when
+        # interval is explicitly "1wk" or "1w".
+        if interval and interval.lower() in ("1wk", "1w", "w"):
+            df["Week"] = df["Date"].dt.isocalendar().week.astype(int)
+            df["Year"] = df["Date"].dt.isocalendar().year.astype(int)
+            df = (
+                df.groupby(["Year", "Week"])
+                .agg(
+                    Date=("Date", "last"),
+                    Open=("Open", "first"),
+                    High=("High", "max"),
+                    Low=("Low", "min"),
+                    Close=("Close", "last"),
+                    Volume=("Volume", "sum"),
+                )
+                .reset_index(drop=True)
+            )
+
+        # --- build response list -------------------------------------------
+        chart_data: List[Dict[str, Any]] = []
+        for _, row in df.iterrows():
+            chart_data.append({
+                "time":   row["Date"].strftime("%Y-%m-%dT%H:%M:%S"),
+                "open":   round(float(row["Open"]),   2),
+                "high":   round(float(row["High"]),   2),
+                "low":    round(float(row["Low"]),    2),
+                "close":  round(float(row["Close"]),  2),
+                "volume": int(row["Volume"]),
+            })
+
+        used_interval = interval if interval else "1d"
+        logger.info("[Stooq] chart for %s: %d bars (%s)", symbol.upper(), len(chart_data), period)
+        return {
+            "symbol":   symbol.upper(),
+            "period":   period,
+            "interval": used_interval,
+            "data":     chart_data,
+        }
+    except Exception as exc:
+        logger.warning("[Stooq] chart failed for %s: %s — trying yfinance", symbol, exc)
+
+    # --- attempt 2: yfinance -----------------------------------------------
+    try:
+        used_interval = interval or _yf_optimal_interval(period_lower)
+        df = _yf_fetch_history(symbol, period_lower, used_interval)
+
+        chart_data = []
+        for idx, row in df.iterrows():
+            chart_data.append({
+                "time":   idx.isoformat(),
+                "open":   round(float(row["Open"]),   2),
+                "high":   round(float(row["High"]),   2),
+                "low":    round(float(row["Low"]),    2),
+                "close":  round(float(row["Close"]),  2),
+                "volume": int(row["Volume"]),
+            })
+
+        logger.info("[yfinance] chart for %s: %d bars", symbol.upper(), len(chart_data))
+        return {
+            "symbol":   symbol.upper(),
+            "period":   period,
+            "interval": used_interval,
+            "data":     chart_data,
+        }
+    except Exception as exc:
+        logger.error("[yfinance] chart failed for %s: %s", symbol, exc)
+        raise ValueError(f"All chart sources failed for {symbol}") from exc
+
+
+# ===========================================================================
+# 5.  yfinance HELPERS  (fallback layer — logic unchanged from original)
+# ===========================================================================
+
 
 @lru_cache(maxsize=128)
-def get_ticker(symbol: str) -> yf.Ticker:
-    """Cached function to get a yf.Ticker object"""
-    # Note: Do NOT pass session parameter - yfinance handles its own session with curl_cffi
+def _yf_ticker(symbol: str) -> yf.Ticker:
     return yf.Ticker(symbol)
 
-# Helper function to get optimal interval based on period (lean data approach)
-def get_optimal_interval(period: str) -> str:
-    """Get optimal interval for a given period to minimize data points while maintaining clarity"""
-    period_lower = period.lower()
-    interval_map = {
-        "1d": "15m",      # ~26 data points for 1 day
-        "5d": "60m",      # ~35 data points for 5 days
-        "1w": "60m",      # ~35 data points for 1 week
-        "1mo": "1d",      # ~21 data points for 1 month
-        "3mo": "1d",      # ~63 data points for 3 months
-        "6mo": "1wk",     # ~26 data points for 6 months (default)
-        "1y": "1wk",      # ~52 data points for 1 year
-        "5y": "1mo",      # ~60 data points for 5 years
-        "max": "1mo"      # ~60 data points for max period
-    }
-    return interval_map.get(period_lower, "1wk")  # Default to 1wk (6mo default) if period not found
 
-# Helper function to normalize period for yfinance (converts 1w to 5d, etc.)
-def normalize_period(period: str) -> str:
-    """Normalize period string for yfinance compatibility"""
-    period_lower = period.lower()
-    period_map = {
-        "1w": "5d",      # yfinance uses 5d for 1 week
-        "1mo": "1mo",    # yfinance uses 1mo for 1 month
-        "6mo": "6mo",    # yfinance uses 6mo for 6 months
-        "1y": "1y",      # yfinance uses 1y for 1 year
-        "5y": "5y"       # yfinance uses 5y for 5 years
-    }
-    return period_map.get(period_lower, period)  # Return as-is if not in map
+def _yf_optimal_interval(period: str) -> str:
+    return {
+        "1d": "15m", "5d": "60m", "1w": "60m",
+        "1mo": "1d", "3mo": "1d", "6mo": "1wk",
+        "1y": "1wk", "5y": "1mo", "max": "1mo",
+    }.get(period, "1wk")
 
-# Helper function to fetch ticker data with retries (for individual symbols or charts)
-def fetch_ticker_data(symbol: str, period: str = "1d", interval: str = None, max_retries: int = 3):
-    """Fetch ticker data with retry logic and error handling"""
-    # Use optimal interval if not provided
-    if interval is None:
-        interval = get_optimal_interval(period)
-    
-    last_error = None
-    
+
+def _yf_normalize_period(period: str) -> str:
+    return {"1w": "5d", "6m": "6mo"}.get(period, period)
+
+
+def _yf_fetch_history(symbol: str, period: str = "6mo", interval: str = "1wk", max_retries: int = 3) -> pd.DataFrame:
+    """Fetch history via yfinance with exponential back-off."""
+    last_error: Optional[Exception] = None
     for attempt in range(max_retries):
         try:
-            # Add delay to avoid rate limiting (especially on retries)
             if attempt > 0:
-                delay = min(2 ** attempt, 10)  # Exponential backoff: 2s, 4s, 8s, max 10s
-                logger.info(f"Retrying {symbol} (attempt {attempt + 1}/{max_retries}) after {delay}s delay")
-                time.sleep(delay)
-            else:
-                # Small initial delay to avoid hammering the API
-                time.sleep(0.2)
-            
-            ticker = get_ticker(symbol)
-            
-            # Normalize period for yfinance compatibility
-            normalized_period = normalize_period(period)
-            
-            # Fetch history data with optimal interval
-            data = ticker.history(period=normalized_period, interval=interval)
-            
-            if data is None or data.empty:
-                raise ValueError(f"No data returned for {symbol} (empty DataFrame)")
-            
-            # Validate we got actual price data
-            if "Close" not in data.columns:
-                raise ValueError(f"Invalid data format for {symbol} (missing Close column)")
-            
-            logger.info(f"Successfully fetched data for {symbol} ({len(data)} rows)")
-            return data
-            
-        except ValueError as ve:
-            # Re-raise ValueError immediately (these are expected errors)
-            raise
-        except Exception as e:
-            error_msg = str(e)
-            last_error = error_msg
-            logger.warning(f"Failed to get ticker '{symbol}' (attempt {attempt + 1}/{max_retries}): {error_msg}")
-            
-            # If it's a JSON decode error or network issue, retry
-            if "Expecting value" in error_msg or "JSON" in error_msg or "timeout" in error_msg.lower():
-                if attempt < max_retries - 1:
-                    continue
-            
-            # For other errors, don't retry
-            if attempt == max_retries - 1:
-                break
-    
-    # All retries exhausted
-    raise ValueError(f"Failed to fetch data for {symbol} after {max_retries} attempts. Last error: {last_error}")
+                time.sleep(min(2 ** attempt, 10))
+            ticker = _yf_ticker(symbol)
+            df = ticker.history(period=_yf_normalize_period(period), interval=interval)
+            if df is None or df.empty or "Close" not in df.columns:
+                raise ValueError(f"yfinance: empty/invalid data for {symbol}")
+            return df
+        except Exception as exc:
+            last_error = exc
+            logger.warning("[yfinance] attempt %d/%d for %s: %s", attempt + 1, max_retries, symbol, exc)
+    raise ValueError(f"yfinance failed for {symbol} after {max_retries} attempts: {last_error}")
 
 
+def _yf_batch_prices(symbols: List[str]) -> Dict[str, Dict[str, Any]]:
+    """Batch-download latest close prices via yf.download()."""
+    clean = [s.upper().strip() for s in symbols if s and s.strip()]
+    if not clean:
+        return {}
+    try:
+        df = yf.download(clean, period="1d", progress=False, threads=True)
+        if df.empty:
+            return {}
+        results: Dict[str, Dict[str, Any]] = {}
+        if isinstance(df.columns, pd.MultiIndex):
+            for sym in clean:
+                if ("Close", sym) in df.columns:
+                    price = df[("Close", sym)].iloc[-1]
+                    if pd.notna(price):
+                        results[sym] = {
+                            "price":     float(price),
+                            "timestamp": df.index[-1].isoformat(),
+                        }
+        else:
+            if len(clean) == 1 and "Close" in df.columns:
+                results[clean[0]] = {
+                    "price":     float(df["Close"].iloc[-1]),
+                    "timestamp": df.index[-1].isoformat(),
+                }
+        return results
+    except Exception as exc:
+        logger.warning("[yfinance batch] %s", exc)
+        return {}
 
-# ============================================
-# 1️⃣ GET CURRENT PRICE
-# ============================================
 
+# ===========================================================================
+# 6.  Pydantic request models
+# ===========================================================================
+
+
+class BulkChartsRequest(BaseModel):
+    symbols: List[str]
+    period:  Optional[str] = "6mo"
+    interval: Optional[str] = None
+
+
+# ===========================================================================
+# 7.  FastAPI ROUTES  —  identical URL signatures as v2
+# ===========================================================================
+
+
+# ── 1. GET /api/price/{symbol} ──────────────────────────────────────────────
 @app.get("/api/price/{symbol}")
 async def get_current_price(symbol: str):
-    """Get current price for a symbol using ticker.info for latest data"""
+    """Current price for one symbol."""
     try:
-        ticker = get_ticker(symbol)
-        
-        # Use ticker.info for real-time/latest price data
-        info = ticker.info
-        
-        # Try multiple price keys as they can vary
-        current_price = info.get('currentPrice') or info.get('regularMarketPrice') or info.get('previousClose')
-        
-        if current_price is None:
-            # Fallback to history if info doesn't have price
-            logger.warning(f"No price in info for {symbol}, falling back to history")
-            data = fetch_ticker_data(symbol, period="1d", interval="15m")
-            current_price = float(data["Close"].iloc[-1])
-            timestamp = data.index[-1].isoformat()
-        else:
-            # Use info timestamp if available
-            timestamp = info.get('regularMarketTime') or datetime.now().isoformat()
-            if isinstance(timestamp, (int, float)):
-                # Convert Unix timestamp to ISO format
-                timestamp = datetime.fromtimestamp(timestamp).isoformat()
-        
-        response = {
-            "symbol": symbol.upper(),
-            "price": float(current_price),
-            "timestamp": timestamp,
-            "currency": info.get('currency', 'USD')
-        }
-        
-        return response
-    
-    except ValueError as e:
-        logger.error(f"Price fetch error for {symbol}: {e}")
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logger.error(f"Unexpected error for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=f"Error fetching price for {symbol}: {str(e)}")
+        return await scrape_price(symbol)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        logger.error("get_current_price(%s): %s", symbol, exc)
+        raise HTTPException(status_code=500, detail=str(exc))
 
-# ============================================
-# 2️⃣ GET CHART DATA (OHLC)
-# ============================================
 
+# ── 2. GET /api/chart/{symbol} ──────────────────────────────────────────────
 @app.get("/api/chart/{symbol}")
-async def get_chart_data(symbol: str, period: str = "6mo", interval: str = None):
-    """Get chart data (OHLC) for a symbol with optimal intervals"""
+async def get_chart_data(symbol: str, period: str = "6mo", interval: Optional[str] = None):
+    """OHLCV chart for one symbol."""
+    valid = ["1d", "5d", "1w", "1mo", "3mo", "6mo", "1y", "5y", "max"]
+    if period not in valid:
+        raise HTTPException(status_code=400, detail=f"Invalid period. Valid: {valid}")
     try:
-        # Validate periods
-        valid_periods = ["1d", "1w", "1mo", "6mo", "1y", "5y"]
-        
-        if period not in valid_periods:
-            raise HTTPException(status_code=400, detail=f"Invalid period. Valid options: {valid_periods}")
-        
-        # Use optimal interval if not provided
-        if interval is None:
-            interval = get_optimal_interval(period)
-        
-        df = fetch_ticker_data(symbol, period=period, interval=interval)
-        
-        chart_data = []
-        for index, row in df.iterrows():
-            chart_data.append({
-                "time": index.isoformat(),
-                "open": round(float(row["Open"]), 2),
-                "high": round(float(row["High"]), 2),
-                "low": round(float(row["Low"]), 2),
-                "close": round(float(row["Close"]), 2),
-                "volume": int(row["Volume"])
-            })
-        
-        response = {
-            "symbol": symbol.upper(),
-            "period": period,
-            "interval": interval,
-            "data": chart_data
-        }
-        
-        return response
-    
-    except ValueError as e:
-        logger.error(f"Chart fetch error for {symbol}: {e}")
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logger.error(f"Unexpected chart error for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=f"Error fetching chart for {symbol}: {str(e)}")
+        return await scrape_chart(symbol, period, interval)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        logger.error("get_chart_data(%s): %s", symbol, exc)
+        raise HTTPException(status_code=500, detail=str(exc))
 
-# ============================================
-# 3️⃣ GET MULTIPLE PRICES (Portfolio)
-# ============================================
 
+# ── 3. POST /api/prices  ────────────────────────────────────────────────────
 @app.post("/api/prices")
 async def get_multiple_prices(symbols: List[str]):
-    """Get current prices for multiple symbols - uses batch download for efficiency"""
-    try:
-        if not symbols:
-            return {"data": {}}
-        
-        # Use batch download for better performance
-        batch_results = batch_download_prices(symbols, period="1d")
-        
-        # Format results
-        results = {}
-        for symbol in symbols:
-            symbol_upper = symbol.upper().strip()
-            if symbol_upper in batch_results:
-                results[symbol_upper] = batch_results[symbol_upper]
-            else:
-                # Fallback to individual fetch if batch failed for this symbol
-                try:
-                    data = fetch_ticker_data(symbol_upper, period="1d", interval="1d")
-                    results[symbol_upper] = {
-                        "price": float(data["Close"].iloc[-1]),
-                        "timestamp": data.index[-1].isoformat() if hasattr(data.index[-1], 'isoformat') else str(data.index[-1])
-                    }
-                except Exception as e:
-                    logger.warning(f"Failed to fetch price for {symbol}: {e}")
-                    results[symbol_upper] = {"error": f"Failed to fetch: {str(e)}"}
-        
-        return {"data": results}
-    except Exception as e:
-        logger.error(f"Error in get_multiple_prices: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    """Prices for a list of symbols."""
+    if not symbols:
+        return {"data": {}}
 
-# ============================================
-# 4️⃣ GET COMBINED PORTFOLIO VALUE
-# ============================================
+    results: Dict[str, Any] = {}
+    for sym in symbols:
+        try:
+            data = await scrape_price(sym)
+            results[sym.upper()] = {"price": data["price"], "timestamp": data["timestamp"]}
+        except ValueError as exc:
+            results[sym.upper()] = {"error": str(exc)}
 
+    return {"data": results}
+
+
+# ── 4. POST /api/portfolio/value ────────────────────────────────────────────
 @app.post("/api/portfolio/value")
 async def get_portfolio_value(portfolio: Dict[str, float]):
     """
-    Get total portfolio value and breakdown
-    portfolio: {"AAPL": 10, "MSFT": 5} (quantity per symbol)
-    Uses batch download for efficiency
+    Total portfolio value.
+    Body: {"AAPL": 10, "MSFT": 5}   (symbol → quantity)
     """
-    try:
-        symbols = list(portfolio.keys())
-        if not symbols:
-            return {
-                "total_value": 0.0,
-                "breakdown": {},
-                "timestamp": datetime.now().isoformat()
+    if not portfolio:
+        return {"total_value": 0.0, "breakdown": {}, "timestamp": datetime.now().isoformat()}
+
+    total  = 0.0
+    breakdown: Dict[str, Any] = {}
+
+    for symbol, qty in portfolio.items():
+        try:
+            data  = await scrape_price(symbol)
+            price = data["price"]
+            value = price * qty
+            total += value
+            breakdown[symbol.upper()] = {
+                "price":    round(price, 2),
+                "quantity": qty,
+                "value":    round(value, 2),
             }
-        
-        # Use batch download for all symbols at once
-        batch_results = batch_download_prices(symbols, period="1d")
-        
-        total_value = 0.0
-        breakdown = {}
-        
-        for symbol, quantity in portfolio.items():
-            symbol_upper = symbol.upper().strip()
-            if symbol_upper in batch_results:
-                price = batch_results[symbol_upper]["price"]
-                value = price * quantity
-                total_value += value
-                breakdown[symbol_upper] = {
-                    "price": price,
-                    "quantity": quantity,
-                    "value": round(value, 2)
-                }
-            else:
-                # Fallback to individual fetch
-                try:
-                    data = fetch_ticker_data(symbol_upper, period="1d", interval="1d")
-                    price = float(data["Close"].iloc[-1])
-                    value = price * quantity
-                    total_value += value
-                    breakdown[symbol_upper] = {
-                        "price": price,
-                        "quantity": quantity,
-                        "value": round(value, 2)
-                    }
-                except Exception as e:
-                    logger.warning(f"Failed to fetch price for {symbol}: {e}")
-                    breakdown[symbol_upper] = {"error": f"Failed to fetch: {str(e)}"}
-        
-        response = {
-            "total_value": round(total_value, 2),
-            "breakdown": breakdown,
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        return response
-    
-    except Exception as e:
-        logger.error(f"Error in get_portfolio_value: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        except ValueError as exc:
+            breakdown[symbol.upper()] = {"error": str(exc)}
 
-# ============================================
-# 5️⃣ GET COMBINED HISTORICAL CHART
-# ============================================
+    return {
+        "total_value": round(total, 2),
+        "breakdown":   breakdown,
+        "timestamp":   datetime.now().isoformat(),
+    }
 
+
+# ── 5. POST /api/portfolio/chart ────────────────────────────────────────────
 @app.post("/api/portfolio/chart")
-async def get_portfolio_chart(portfolio: Dict[str, float], period: str = "6mo", interval: str = None):
+async def get_portfolio_chart(portfolio: Dict[str, float], period: str = "6mo", interval: Optional[str] = None):
     """
-    Get combined portfolio performance chart
-    portfolio: {"AAPL": 10, "MSFT": 5}
-    Default period: 6mo with optimal intervals for lean data
+    Combined portfolio value over time.
+
+    We fetch each symbol's daily chart from Stooq, align on Date, multiply
+    by quantity, and sum.  Falls back to yf.download() for the whole batch
+    if any Stooq call fails.
     """
+    symbols = list(portfolio.keys())
+    if not symbols:
+        raise HTTPException(status_code=400, detail="Empty portfolio")
+
+    period_lower = period.lower()
+
+    # --- attempt 1: Stooq per-symbol ---------------------------------------
     try:
-        symbols = list(portfolio.keys())
-        if not symbols:
-            raise HTTPException(status_code=404, detail="No symbols in portfolio")
+        frames: Dict[str, pd.DataFrame] = {}
+        for sym in symbols:
+            stooq_sym = yahoo_to_stooq(sym)
+            d1, d2    = _date_range(period_lower)
+            df        = await _stooq.fetch_daily(stooq_sym, d1, d2)
+            max_rows  = _PERIOD_ROWS.get(period_lower, len(df))
+            df        = df.tail(max_rows).reset_index(drop=True)
+            frames[sym.upper()] = df.set_index("Date")[["Close"]]
 
-        # Use optimal interval if not provided
-        if interval is None:
-            interval = get_optimal_interval(period)
-        
-        logger.info(f"Fetching portfolio chart for {len(symbols)} symbols, period={period}, interval={interval}")
+        # Align all frames on Date (outer join, forward-fill missing days).
+        combined = pd.concat(frames, axis=1)
+        combined.columns = [sym for sym, _ in combined.columns]   # flatten MultiIndex
+        combined = combined.ffill()
+        combined = combined.dropna()                               # drop leading NaNs
 
-        # Fetch all historical data in one go
-        # Note: Do NOT pass session parameter - yfinance handles its own session with curl_cffi
-        df = yf.download(symbols, period=period, interval=interval, progress=False, threads=True)
-        
-        if df.empty:
-            raise HTTPException(status_code=404, detail="No data found for portfolio")
+        # Weighted sum.
+        combined["total"] = sum(
+            combined[sym.upper()] * qty for sym, qty in portfolio.items()
+        )
 
-        # Calculate portfolio value over time
-        portfolio_values = pd.DataFrame(index=df.index)
-        for symbol, quantity in portfolio.items():
-            symbol_upper = symbol.upper()
-            close_col = ('Close', symbol_upper)
-            if close_col in df.columns:
-                portfolio_values[symbol_upper] = df[close_col] * quantity
+        chart_data = [
+            {"time": str(date.date()), "value": round(float(row["total"]), 2)}
+            for date, row in combined.iterrows()
+        ]
 
-        # Sum up the values of all assets
-        portfolio_values['total'] = portfolio_values.sum(axis=1)
-
-        combined_data = []
-        for date, row in portfolio_values.iterrows():
-            combined_data.append({
-                "time": date.isoformat(),
-                "value": round(row['total'], 2)
-            })
-
-        response = {
+        logger.info("[Stooq] portfolio chart: %d points", len(chart_data))
+        return {
             "portfolio": portfolio,
-            "period": period,
-            "interval": interval,
-            "data": combined_data
+            "period":    period,
+            "interval":  interval or "1d",
+            "data":      chart_data,
         }
-        
-        return response
-    
-    except Exception as e:
-        logger.error(f"Error in get_portfolio_chart: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        logger.warning("[Stooq] portfolio chart failed: %s — trying yfinance", exc)
 
-# ============================================
-# 6️⃣ BULK FETCH CHARTS (for dashboard)
-# ============================================
+    # --- attempt 2: yfinance batch -----------------------------------------
+    try:
+        used_interval = interval or _yf_optimal_interval(period_lower)
+        df = yf.download(
+            [s.upper() for s in symbols],
+            period=_yf_normalize_period(period_lower),
+            interval=used_interval,
+            progress=False,
+            threads=True,
+        )
+        if df.empty:
+            raise HTTPException(status_code=404, detail="No historical data found")
 
+        pv = pd.DataFrame(index=df.index)
+        for sym, qty in portfolio.items():
+            col = ("Close", sym.upper())
+            if col in df.columns:
+                pv[sym.upper()] = df[col] * qty
+        pv["total"] = pv.sum(axis=1)
+
+        chart_data = [
+            {"time": date.isoformat(), "value": round(float(row["total"]), 2)}
+            for date, row in pv.iterrows()
+        ]
+
+        return {
+            "portfolio": portfolio,
+            "period":    period,
+            "interval":  used_interval,
+            "data":      chart_data,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Portfolio chart yfinance error: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ── 6. POST /api/charts/bulk ────────────────────────────────────────────────
 @app.post("/api/charts/bulk")
 async def bulk_fetch_charts(request: BulkChartsRequest):
-    """
-    Bulk fetch chart data for multiple symbols efficiently
-    Request: {
-        "symbols": ["AAPL", "MSFT", ...],
-        "period": "6mo" (default),
-        "interval": "1wk" (optional, will use optimal if not provided)
-    }
-    Returns: {
-        "data": {
-            "SYMBOL": {
-                "symbol": "SYMBOL",
-                "period": "6mo",
-                "interval": "1wk",
-                "data": [{"time": "...", "open": ..., "high": ..., "low": ..., "close": ..., "volume": ...}, ...]
-            },
-            ...
-        }
-    }
-    """
-    try:
-        symbols = request.symbols
-        period = request.period or "6mo"
-        interval = request.interval
-        
-        if not symbols:
-            return {"data": {}}
-        
-        # Use optimal interval if not provided
-        if interval is None:
-            interval = get_optimal_interval(period)
-        
-        logger.info(f"Bulk fetching charts for {len(symbols)} symbols, period={period}, interval={interval}")
-        
-        # Normalize period for yfinance compatibility
-        normalized_period = normalize_period(period)
-        
-        # Fetch all symbols at once using batch download
-        symbols_clean = [s.upper().strip() for s in symbols if s and s.strip()]
-        
+    """Chart data for multiple symbols in one call."""
+    symbols  = [s.strip() for s in request.symbols if s and s.strip()]
+    period   = request.period or "6mo"
+    interval = request.interval
+
+    if not symbols:
+        return {"data": {}}
+
+    results: Dict[str, Any] = {}
+    for sym in symbols:
         try:
-            df = yf.download(symbols_clean, period=normalized_period, interval=interval, progress=False, threads=True)
-            
-            if df.empty:
-                raise ValueError("Empty DataFrame returned from batch download")
-            
-            results = {}
-            
-            # Process MultiIndex DataFrame (multiple symbols)
-            if isinstance(df.columns, pd.MultiIndex):
-                for symbol in symbols_clean:
-                    try:
-                        chart_data = []
-                        if ('Close', symbol) in df.columns:
-                            for index in df.index:
-                                chart_data.append({
-                                    "time": index.isoformat() if hasattr(index, 'isoformat') else str(index),
-                                    "open": round(float(df[('Open', symbol)].loc[index]), 2),
-                                    "high": round(float(df[('High', symbol)].loc[index]), 2),
-                                    "low": round(float(df[('Low', symbol)].loc[index]), 2),
-                                    "close": round(float(df[('Close', symbol)].loc[index]), 2),
-                                    "volume": int(df[('Volume', symbol)].loc[index]) if ('Volume', symbol) in df.columns else 0
-                                })
-                            
-                            results[symbol] = {
-                                "symbol": symbol,
-                                "period": period,
-                                "interval": interval,
-                                "data": chart_data
-                            }
-                    except Exception as e:
-                        logger.warning(f"Could not extract chart data for {symbol}: {e}")
-                        results[symbol] = {"error": f"Failed to fetch: {str(e)}"}
-            else:
-                # Single symbol case
-                if len(symbols_clean) == 1:
-                    symbol = symbols_clean[0]
-                    chart_data = []
-                    if 'Close' in df.columns:
-                        for index in df.index:
-                            chart_data.append({
-                                "time": index.isoformat() if hasattr(index, 'isoformat') else str(index),
-                                "open": round(float(df['Open'].loc[index]), 2),
-                                "high": round(float(df['High'].loc[index]), 2),
-                                "low": round(float(df['Low'].loc[index]), 2),
-                                "close": round(float(df['Close'].loc[index]), 2),
-                                "volume": int(df['Volume'].loc[index]) if 'Volume' in df.columns else 0
-                            })
-                        
-                        results[symbol] = {
-                            "symbol": symbol,
-                            "period": period,
-                            "interval": interval,
-                            "data": chart_data
-                        }
-            
-            logger.info(f"Bulk charts fetch completed: {len([r for r in results.values() if 'error' not in r])}/{len(symbols)} successful")
-            return {"data": results}
-            
-        except Exception as e:
-            logger.warning(f"Batch chart download failed: {e}, falling back to individual fetches")
-            # Fallback to individual fetches
-            results = {}
-            for symbol in symbols_clean[:20]:  # Limit to first 20 to avoid timeout
-                try:
-                    data = fetch_ticker_data(symbol, period=period, interval=interval, max_retries=1)
-                    chart_data = []
-                    for index, row in data.iterrows():
-                        chart_data.append({
-                            "time": index.isoformat() if hasattr(index, 'isoformat') else str(index),
-                            "open": round(float(row["Open"]), 2),
-                            "high": round(float(row["High"]), 2),
-                            "low": round(float(row["Low"]), 2),
-                            "close": round(float(row["Close"]), 2),
-                            "volume": int(row["Volume"]) if "Volume" in row else 0
-                        })
-                    
-                    results[symbol] = {
-                        "symbol": symbol,
-                        "period": period,
-                        "interval": interval,
-                        "data": chart_data
-                    }
-                    time.sleep(0.2)  # Small delay between requests
-                except Exception as e:
-                    logger.warning(f"Failed to fetch chart for {symbol}: {e}")
-                    results[symbol] = {"error": f"Failed to fetch: {str(e)}"}
-            
-            return {"data": results}
-        
-    except Exception as e:
-        logger.error(f"Error in bulk_fetch_charts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+            results[sym.upper()] = await scrape_chart(sym, period, interval)
+        except ValueError as exc:
+            results[sym.upper()] = {"error": str(exc)}
 
-# ============================================
-# 7️⃣ BULK FETCH ALL SYMBOLS (for login/dashboard)
-# ============================================
+    return {"data": results}
 
+
+# ── 7. POST /api/prices/bulk ────────────────────────────────────────────────
 @app.post("/api/prices/bulk")
 async def bulk_fetch_prices(symbols: List[str]):
     """
-    Bulk fetch prices for all symbols at once using batch download
-    Optimized for fetching all client stocks on login
-    Returns: {"data": {"SYMBOL": {"price": float, "timestamp": str}, ...}}
+    Optimised bulk price fetch (e.g. at login).
+
+    Tries Stooq for every symbol first.  Any symbols that fail Stooq
+    are retried as a single yf.download() batch call.
     """
-    try:
-        if not symbols:
-            return {"data": {}}
-        
-        logger.info(f"Bulk fetching prices for {len(symbols)} symbols")
-        
-        # Use batch download - much more efficient
-        batch_results = batch_download_prices(symbols, period="1d")
-        
-        # Format response
-        results = {}
-        for symbol in symbols:
-            symbol_upper = symbol.upper().strip()
-            if symbol_upper in batch_results:
-                results[symbol_upper] = batch_results[symbol_upper]
-            else:
-                results[symbol_upper] = {"error": "Failed to fetch"}
-        
-        logger.info(f"Bulk fetch completed: {len([r for r in results.values() if 'error' not in r])}/{len(symbols)} successful")
-        return {"data": results}
-        
-    except Exception as e:
-        logger.error(f"Error in bulk_fetch_prices: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    if not symbols:
+        return {"data": {}}
 
-# ============================================
-# 7️⃣ HEALTH CHECK
-# ============================================
+    results: Dict[str, Any] = {}
+    missing: List[str]      = []
 
+    # --- primary: Stooq ----------------------------------------------------
+    for sym in symbols:
+        sym_upper = sym.upper().strip()
+        try:
+            data = await scrape_price(sym)
+            results[sym_upper] = {"price": data["price"], "timestamp": data["timestamp"]}
+        except ValueError:
+            missing.append(sym_upper)
+
+    # --- secondary: yfinance batch for stragglers -------------------------
+    if missing:
+        logger.info("[bulk] yfinance batch fallback for %d symbols", len(missing))
+        batch = _yf_batch_prices(missing)
+        for sym, info in batch.items():
+            results[sym] = info
+        for sym in missing:
+            if sym not in results:
+                results[sym] = {"error": "Failed to fetch"}
+
+    success = sum(1 for v in results.values() if "error" not in v)
+    logger.info("[bulk prices] %d/%d successful", success, len(symbols))
+    return {"data": results}
+
+
+# ── 8. GET /api/health ──────────────────────────────────────────────────────
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint"""
     return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "service": "Pricing Service"
+        "status":          "healthy",
+        "timestamp":       datetime.now().isoformat(),
+        "service":         "Pricing Service",
+        "data_source":     "Stooq (primary) / yfinance (fallback)",
+        "cache_entries":   len(_stooq._cache),
     }
 
-# ============================================
-# 9️⃣ CLEAR CACHE
-# ============================================
 
+# ── 9. POST /api/cache/clear ────────────────────────────────────────────────
 @app.post("/api/cache/clear")
 async def clear_cache():
-    """Clear yfinance cache (clears persistent cache directory)"""
-    try:
-        import shutil
-        cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "py-yfinance")
-        if os.path.exists(cache_dir):
-            shutil.rmtree(cache_dir)
-            os.makedirs(cache_dir, exist_ok=True)
-            logger.info("yfinance cache cleared")
-        return {"status": "cache cleared", "cache_dir": cache_dir}
-    except Exception as e:
-        logger.error(f"Error clearing cache: {e}")
-        raise HTTPException(status_code=500, detail=f"Error clearing cache: {str(e)}")
+    """
+    Clear both the in-memory Stooq cache and the yfinance disk cache.
+    On Windows, yfinance may hold cookies.db open — we skip locked files
+    gracefully instead of crashing.
+    """
+    # -- Stooq in-memory cache ----------------------------------------------
+    with _stooq._lock:
+        _stooq._cache.clear()
+    stooq_cleared = True
 
+    # -- yfinance disk cache ------------------------------------------------
+    skipped: List[str] = []
+    deleted  = 0
+    try:
+        if os.path.exists(cache_dir):
+            for root, dirs, files in os.walk(cache_dir, topdown=False):
+                for fname in files:
+                    fpath = os.path.join(root, fname)
+                    try:
+                        os.remove(fpath)
+                        deleted += 1
+                    except PermissionError:
+                        skipped.append(fname)
+                for dname in dirs:
+                    try:
+                        os.rmdir(os.path.join(root, dname))
+                    except OSError:
+                        pass
+    except Exception as exc:
+        logger.warning("cache/clear disk error: %s", exc)
+
+    logger.info("Cache cleared: stooq=%s, yfinance=%d deleted / %d skipped", stooq_cleared, deleted, len(skipped))
+    return {
+        "status":                 "cache cleared",
+        "stooq_cache_cleared":    stooq_cleared,
+        "playwright_browser_alive": _pw_browser._browser is not None and not _pw_browser._browser.is_closed(),
+        "yfinance_cache_dir":     cache_dir,
+        "yfinance_files_deleted": deleted,
+        "yfinance_files_skipped": skipped,
+    }
+
+
+# ===========================================================================
+# 8.  ENTRY POINT
+# ===========================================================================
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

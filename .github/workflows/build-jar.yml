@@ -1,0 +1,28 @@
+name: Springboot Jar
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: maven
+      - name: Build Jar(Skip Tests)
+        run: mvn clean package -DskipTests=true -B
+
+      - name: Upload Jar to Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: springboot-app-jar
+          path: target/*.jar

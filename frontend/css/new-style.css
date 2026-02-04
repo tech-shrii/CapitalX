@@ -141,6 +141,29 @@ body{
   color: #b91c1c;
 }
 
+.card-blue-theme {
+  background: linear-gradient(145deg, #ffffff 0%, #eff6ff 100%);
+  border: 1px solid #bfdbfe;
+}
+.card-blue-theme .kpi-title { color: #1e40af; }
+
+.card-purple-theme {
+  background: linear-gradient(145deg, #ffffff 0%, #faf5ff 100%);
+  border: 1px solid #e9d5ff;
+}
+.card-purple-theme .kpi-title { color: #6b21a8; }
+
+.card-orange-theme {
+  background: linear-gradient(145deg, #ffffff 0%, #fff7ed 100%);
+  border: 1px solid #fed7aa;
+}
+.card-orange-theme .kpi-title { color: #9a3412; }
+
+/* Update existing green theme for KPI titles */
+.card-green-theme .kpi-title {
+  color: #15803d;
+}
+
 /* CHART AREA */
 .grid2{
   display:grid;

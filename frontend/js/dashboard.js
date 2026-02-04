@@ -239,6 +239,7 @@ async function loadDashboardData() {
                             <td><span class="badge badge-red">${asset.category || 'N/A'}</span></td>
                             <td class="right">${formatCurrency(asset.currentValue || 0, asset.currency || defaultCurrency)}</td>
                             <td class="right ${(asset.returns || 0) >= 0 ? 'positive' : 'negative'}">${formatPercent(asset.returns || 0)}</td>
+                            <td class="right negative">${formatPercent(asset.returns || 0)}</td>
                         </tr>
                     `).join('');
                 } else {

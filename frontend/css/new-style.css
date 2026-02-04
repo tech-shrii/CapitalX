@@ -73,7 +73,8 @@ body{
   gap:26px;
   background-color: #10b981;
   padding: 0 24px;
-  border-radius: 10px;
+  border-radius: 28px;
+  /* align-items:center; */
   margin-bottom:22px;
 }
 
@@ -121,6 +122,24 @@ body{
 
 .positive{color:#16a34a;}
 .negative{color:#dc2626;}
+
+.card-green-theme {
+  background: linear-gradient(145deg, #ffffff 0%, #f0fdf4 100%);
+  border: 1px solid #bbf7d0;
+}
+
+.card-green-theme h3 {
+  color: #15803d;
+}
+
+.card-red-theme {
+  background: linear-gradient(145deg, #ffffff 0%, #fef2f2 100%);
+  border: 1px solid #fecaca;
+}
+
+.card-red-theme h3 {
+  color: #b91c1c;
+}
 
 /* CHART AREA */
 .grid2{

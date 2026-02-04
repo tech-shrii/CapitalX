@@ -21,7 +21,7 @@ body{
   display:flex;
   justify-content:space-between;
   align-items:flex-start;
-  margin-bottom:12px;
+  margin-bottom:18px;
 }
 
 .title{
@@ -45,9 +45,9 @@ body{
   position: sticky;
   top: 0;
   z-index: 100;
-  background-color: #6a7996;
+  background-color: #f5f7fb;
   margin: -24px -24px 0 -24px;
-  padding: 10px 24px 0 24px;
+  padding: 24px 24px 0 24px;
 }
 
 .branding {
@@ -57,7 +57,7 @@ body{
 }
 
 .logo {
-  height: 50px;
+  height: 40px;
   width: auto;
 }
 

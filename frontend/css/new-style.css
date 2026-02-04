@@ -11,7 +11,7 @@ body{
 }
 
 .container{
-  max-width:1300px;
+  max-width:100%;
   margin:auto;
   padding:24px;
 }
@@ -21,12 +21,13 @@ body{
   display:flex;
   justify-content:space-between;
   align-items:flex-start;
-  margin-bottom:18px;
+  margin-bottom:12px;
 }
 
 .title{
   font-size:26px;
   font-weight:800;
+  color: #2563eb;
 }
 
 .email{
@@ -40,6 +41,26 @@ body{
   border:1px solid #dbe3f0;
 }
 
+.sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background-color: #6a7996;
+  margin: -24px -24px 0 -24px;
+  padding: 10px 24px 0 24px;
+}
+
+.branding {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo {
+  height: 50px;
+  width: auto;
+}
+
 .header-actions {
     display: flex;
     align-items: center;
@@ -50,20 +71,22 @@ body{
 .nav{
   display:flex;
   gap:26px;
-  border-bottom:1px solid #e5eaf3;
+  background-color: #10b981;
+  padding: 0 24px;
+  border-radius: 10px;
   margin-bottom:22px;
 }
 
 .nav a{
-  padding:12px 0;
+  padding:16px 0;
   text-decoration:none;
-  color:#475569;
+  color: rgba(255, 255, 255, 0.9);
   font-weight:500;
 }
 
 .nav a.active{
-  color:#2563eb;
-  border-bottom:3px solid #2563eb;
+  color: #ffffff;
+  border-bottom:3px solid #ffffff;
 }
 
 /* CARDS */

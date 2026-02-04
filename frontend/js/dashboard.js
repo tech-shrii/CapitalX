@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
     setupUser();
     setupTabs();
+    setupLogout();
     loadTab('dashboard');
     loadClientsForSwitcher();
     setupClientSwitcher();
@@ -103,6 +104,16 @@ function setupUser() {
     }
 }
 
+function setupLogout() {
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            localStorage.clear();
+            window.location.href = '../index.html';
+        });
+    }
+}
+
 function setupTabs() {
     const navLinks = document.querySelectorAll('.nav a');
     navLinks.forEach(link => {
@@ -146,7 +157,6 @@ async function loadTab(tab) {
             <div class="card">
                 <h2>Settings</h2>
                 <div id="settings-content"></div>
-                <button id="logoutBtn" class="btn btn-danger" style="margin-top: 20px;">Logout</button>
             </div>
         `;
         setupSettings();
@@ -633,14 +643,6 @@ function setupSettings() {
             </div>
         </div>
     `;
-
-    const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', () => {
-            localStorage.clear();
-            window.location.href = '../index.html';
-        });
-    }
 
     const addClientBtn = document.getElementById('addClientBtn');
     const addClientModal = document.getElementById('addClientModal');

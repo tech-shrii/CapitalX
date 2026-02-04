@@ -45,7 +45,7 @@ body{
   position: sticky;
   top: 0;
   z-index: 100;
-  background-color: #f5f7fb;
+  background-color: #6a7996;
   margin: -24px -24px 0 -24px;
   padding: 24px 24px 0 24px;
 }
@@ -57,7 +57,7 @@ body{
 }
 
 .logo {
-  height: 40px;
+  height: 60px;
   width: auto;
 }
 

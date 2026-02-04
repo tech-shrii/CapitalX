@@ -1,0 +1,120 @@
+| Folder / File Path                                                           | Owner | Reason                                     |
+| ---------------------------------------------------------------------------- | ----- | ------------------------------------------ |
+| backend/src/main/java/com/app/portfolio/PortfolioApplication.java            | A     | Main Spring Boot entry point               |
+| backend/pom.xml                                                              | A     | Maven dependencies and build configuration |
+| backend/src/main/java/com/app/portfolio/beans/                               | A     | Core database entities and domain models   |
+| backend/src/main/java/com/app/portfolio/repository/UserRepository.java       | A     | User persistence logic                     |
+| backend/src/main/java/com/app/portfolio/repository/ClientRepository.java     | A     | Client data access                         |
+| backend/src/main/java/com/app/portfolio/repository/OtpTokenRepository.java   | A     | OTP and authentication tokens              |
+| backend/src/main/java/com/app/portfolio/repository/AssetRepository.java      | B     | Asset persistence                          |
+| backend/src/main/java/com/app/portfolio/repository/AssetPriceRepository.java | B     | Asset price history                        |
+| backend/src/main/java/com/app/portfolio/service/auth/                        | A     | Authentication business logic              |
+| backend/src/main/java/com/app/portfolio/service/client/                      | A     | Client management services                 |
+| backend/src/main/java/com/app/portfolio/service/email/                       | A     | Email notifications                        |
+| backend/src/main/java/com/app/portfolio/service/asset/                       | B     | Asset management services                  |
+| backend/src/main/java/com/app/portfolio/service/pricing/                     | B     | Pricing calculations                       |
+| backend/src/main/java/com/app/portfolio/service/dashboard/                   | B     | Portfolio analytics                        |
+| backend/src/main/java/com/app/portfolio/service/excel/                       | B     | Excel import/export                        |
+| backend/src/main/java/com/app/portfolio/service/statement/                   | B     | PDF generation                             |
+| backend/src/main/java/com/app/portfolio/service/news/                        | B     | External financial news APIs               |
+| backend/src/main/java/com/app/portfolio/controller/AuthController.java       | A     | Authentication APIs                        |
+| backend/src/main/java/com/app/portfolio/controller/ClientController.java     | A     | Client CRUD endpoints                      |
+| backend/src/main/java/com/app/portfolio/controller/ProfileController.java    | A     | User profile management                    |
+| backend/src/main/java/com/app/portfolio/controller/AssetController.java      | B     | Asset CRUD APIs                            |
+| backend/src/main/java/com/app/portfolio/controller/PricingController.java    | B     | Pricing APIs                               |
+| backend/src/main/java/com/app/portfolio/controller/DashboardController.java  | B     | Dashboard data APIs                        |
+| backend/src/main/java/com/app/portfolio/controller/ExcelController.java      | B     | Import/export APIs                         |
+| backend/src/main/java/com/app/portfolio/controller/StatementController.java  | B     | PDF generation APIs                        |
+| backend/src/main/java/com/app/portfolio/controller/NewsController.java       | B     | News APIs                                  |
+| backend/src/main/java/com/app/portfolio/security/                            | A     | Spring Security & JWT config               |
+| backend/src/main/java/com/app/portfolio/config/                              | A     | Application configuration                  |
+| backend/src/main/java/com/app/portfolio/dto/auth/                            | A     | Authentication DTOs                        |
+| backend/src/main/java/com/app/portfolio/dto/client/                          | A     | Client DTOs                                |
+| backend/src/main/java/com/app/portfolio/dto/asset/                           | B     | Asset DTOs                                 |
+| backend/src/main/java/com/app/portfolio/dto/pricing/                         | B     | Pricing DTOs                               |
+| backend/src/main/java/com/app/portfolio/mapper/                              | B     | Entity–DTO mapping                         |
+| backend/src/main/java/com/app/portfolio/exceptions/                          | A     | Global exception handling                  |
+| pricing-service/                                                             | B     | Python pricing microservice                |
+| README.md                                                                    | A     | Project documentation                      |
+| PRICING_MICROSERVICE.md                                                      | B     | Microservice documentation                 |
+| sample-portfolio*.csv                                                        | B     | Sample datasets                            |
+| .gitignore                                                                   | A     | Git configuration                          |
+
+
+
+
+
+| Folder / File Path                    | Owner | Reason                   |
+| ------------------------------------- | ----- | ------------------------ |
+| frontend/index.html                   | C     | Application landing page |
+| frontend/auth/login.html              | C     | Login UI                 |
+| frontend/auth/signup.html             | C     | Registration UI          |
+| frontend/css/auth.css                 | C     | Authentication styles    |
+| frontend/js/auth.js                   | C     | Authentication logic     |
+| frontend/dashboard/home.html          | C     | Main dashboard           |
+| frontend/dashboard/client-detail.html | C     | Client portfolio view    |
+| frontend/dashboard/settings.html      | C     | User settings            |
+| frontend/dashboard/charts.html        | D     | Analytics charts         |
+| frontend/dashboard/client-charts.html | D     | Client-specific charts   |
+| frontend/dashboard/import-data.html   | D     | Excel import UI          |
+| frontend/dashboard/statements.html    | D     | PDF statements UI        |
+| frontend/dashboard/news.html          | D     | Financial news UI        |
+| frontend/js/api.js                    | C     | Core API handler         |
+| frontend/js/dashboard.js              | C     | Dashboard logic          |
+| frontend/js/client.js                 | C     | Client UI logic          |
+| frontend/js/settings.js               | C     | Settings logic           |
+| frontend/js/charts.js                 | D     | Chart rendering          |
+| frontend/js/client-charts.js          | D     | Client chart logic       |
+| frontend/js/asset.js                  | D     | Asset UI logic           |
+| frontend/js/import-data.js            | D     | Import logic             |
+| frontend/js/statements.js             | D     | Statement handling       |
+| frontend/js/news.js                   | D     | News integration         |
+| frontend/css/dashboard.css            | C     | Dashboard styling        |
+| frontend/css/main.css                 | C     | Global styles            |
+| frontend/css/new-style.css            | C     | Base styles              |
+| frontend/css/client-charts.css        | D     | Chart-specific styles    |
+
+
+
+
+| Person | Branch                | PR Title                                                |
+| ------ | --------------------- | ------------------------------------------------------- |
+| A      | feature/auth-backend  | feat: Implement authentication backend with JWT and OTP |
+| C      | feature/auth-frontend | feat: Build authentication frontend with login/signup   |
+
+
+
+| Person | Branch                    | PR Title                                              |
+| ------ | ------------------------- | ----------------------------------------------------- |
+| A      | feature/client-management | feat: Add client management system with user profiles |
+| C      | feature/dashboard-core    | feat: Create core dashboard interface                 |
+
+
+
+| Person | Branch                        | PR Title                                            |
+| ------ | ----------------------------- | --------------------------------------------------- |
+| B      | feature/asset-pricing-backend | feat: Build asset management with real-time pricing |
+| D      | feature/asset-charts-frontend | feat: Implement asset management UI with charts     |
+
+
+
+| Person | Branch                             | PR Title                                          |
+| ------ | ---------------------------------- | ------------------------------------------------- |
+| B      | feature/reporting-import           | feat: Implement reporting, Excel import, and news |
+| D      | feature/import-statements-frontend | feat: Create reporting and news interfaces        |
+
+
+| Phase    | PR                             | Depends On                |
+| -------- | ------------------------------ | ------------------------- |
+| Sprint 1 | auth-backend (A)               | —                         |
+| Sprint 1 | auth-frontend (C)              | auth-backend              |
+| Sprint 2 | client-management (A)          | auth-backend              |
+| Sprint 2 | dashboard-core (C)             | client-management         |
+| Sprint 3 | asset-pricing-backend (B)      | auth + client             |
+| Sprint 3 | asset-charts-frontend (D)      | asset backend + dashboard |
+| Sprint 4 | reporting-import (B)           | asset backend             |
+| Sprint 4 | import-statements-frontend (D) | reporting backend         |
+
+
+
+

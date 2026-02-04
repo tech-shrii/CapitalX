@@ -108,8 +108,10 @@ function setupLogout() {
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', () => {
-            localStorage.clear();
-            window.location.href = '../index.html';
+            if (confirm('Are you sure you want to logout?')) {
+                localStorage.clear();
+                window.location.href = '../index.html';
+            }
         });
     }
 }

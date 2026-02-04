@@ -94,8 +94,10 @@ async function handleOtpVerification(e) {
 }
 
 function handleLogout() {
-    localStorage.clear();
-    window.location.href = '../auth/login.html';
+    if (confirm('Are you sure you want to logout?')) {
+        localStorage.clear();
+        window.location.href = '../auth/login.html';
+    }
 }
 
 function showError(message) {

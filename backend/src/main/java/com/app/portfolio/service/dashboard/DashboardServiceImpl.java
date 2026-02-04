@@ -60,6 +60,8 @@ public class DashboardServiceImpl implements DashboardService {
                 categoryBreakdown.put(category, categoryBreakdown.getOrDefault(category, BigDecimal.ZERO).add(currentValue));
             }
 
+            Integer assetCategoryCount = assetAllocation.keySet().size();
+            
             BigDecimal totalProfitLoss = totalCurrentValue.subtract(totalInvested);
             BigDecimal totalProfitLossPercent = totalInvested.compareTo(BigDecimal.ZERO) > 0
                     ? totalProfitLoss.divide(totalInvested, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
@@ -89,28 +91,35 @@ public class DashboardServiceImpl implements DashboardService {
                     })
                     .collect(Collectors.toList());
 
-            // Top performing assets
-            List<DashboardSummaryResponse.TopAssetDto> topAssets = allAssets.stream()
-                    .map(asset -> {
-                        BigDecimal invested = asset.getBuyingRate().multiply(asset.getQuantity());
-                        BigDecimal currentPrice = pricingService.getCurrentPrice(asset.getId());
-                        if (currentPrice == null) {
-                            currentPrice = asset.getBuyingRate();
-                        }
-                        BigDecimal currentValue = currentPrice.multiply(asset.getQuantity());
-                        BigDecimal returns = invested.compareTo(BigDecimal.ZERO) > 0
-                                ? currentValue.subtract(invested).divide(invested, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
-                                : BigDecimal.ZERO;
-                        return DashboardSummaryResponse.TopAssetDto.builder()
-                                .name(asset.getName())
-                                .category(asset.getCategory().name())
-                                .currentValue(currentValue)
-                                .returns(returns)
-                                .build();
-                    })
-                    .sorted((a, b) -> b.getReturns().compareTo(a.getReturns()))
-                    .limit(5)
-                    .collect(Collectors.toList());
+            List<DashboardSummaryResponse.TopAssetDto> allAssetsWithReturns = allAssets.stream()
+                .map(asset -> {
+                    BigDecimal invested = asset.getBuyingRate().multiply(asset.getQuantity());
+                    BigDecimal currentPrice = pricingService.getCurrentPrice(asset.getId());
+                    if (currentPrice == null) {
+                        currentPrice = asset.getBuyingRate();
+                    }
+                    BigDecimal currentValue = currentPrice.multiply(asset.getQuantity());
+                    BigDecimal returns = invested.compareTo(BigDecimal.ZERO) > 0
+                            ? currentValue.subtract(invested).divide(invested, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
+                            : BigDecimal.ZERO;
+                    return DashboardSummaryResponse.TopAssetDto.builder()
+                            .name(asset.getName())
+                            .category(asset.getCategory().name())
+                            .currentValue(currentValue)
+                            .returns(returns)
+                            .build();
+                })
+                .collect(Collectors.toList());
+
+            List<DashboardSummaryResponse.TopAssetDto> topAssets = allAssetsWithReturns.stream()
+                .sorted((a, b) -> b.getReturns().compareTo(a.getReturns()))
+                .limit(5)
+                .collect(Collectors.toList());
+
+            List<DashboardSummaryResponse.TopAssetDto> worstAssets = allAssetsWithReturns.stream()
+                .sorted(Comparator.comparing(DashboardSummaryResponse.TopAssetDto::getReturns))
+                .limit(5)
+                .collect(Collectors.toList());
 
             // Portfolio performance
             Map<String, Double> portfolioMap = allAssets.stream()
@@ -120,6 +129,22 @@ public class DashboardServiceImpl implements DashboardService {
                     asset -> asset.getQuantity().doubleValue(),
                     Double::sum
                 ));
+                
+            com.app.portfolio.dto.pricing.PortfolioChartResponse todaysPerformance = pricingService.getPortfolioChart(portfolioMap, "1d", "1d");
+            BigDecimal todaysPL = BigDecimal.ZERO;
+            BigDecimal todaysPLPercentage = BigDecimal.ZERO;
+
+            if (todaysPerformance != null && todaysPerformance.getData() != null && todaysPerformance.getData().size() > 1) {
+                var startValue = todaysPerformance.getData().get(0).getValue();
+                var endValue = todaysPerformance.getData().get(todaysPerformance.getData().size() - 1).getValue();
+                if(startValue != null && endValue != null) {
+                    todaysPL = BigDecimal.valueOf(endValue - startValue);
+                    if (startValue != 0) {
+                        todaysPLPercentage = todaysPL.divide(BigDecimal.valueOf(startValue), 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100));
+                    }
+                }
+            }
+
 
             List<String> labels;
             List<BigDecimal> performanceData;
@@ -159,6 +184,10 @@ public class DashboardServiceImpl implements DashboardService {
                             .data(performanceData)
                             .build())
                     .topAssets(topAssets)
+                    .worstAssets(worstAssets)
+                    .assetCategoryCount(assetCategoryCount)
+                    .todaysPL(todaysPL)
+                    .todaysPLPercentage(todaysPLPercentage)
                     .assetCategoryBreakdown(categoryBreakdown)
                     .build();
             
@@ -208,33 +237,42 @@ public class DashboardServiceImpl implements DashboardService {
                 categoryBreakdown.put(category, categoryBreakdown.getOrDefault(category, BigDecimal.ZERO).add(currentValue));
             }
 
+            Integer assetCategoryCount = assetAllocation.keySet().size();
+
             BigDecimal totalProfitLoss = totalCurrentValue.subtract(totalInvested);
             BigDecimal totalProfitLossPercent = totalInvested.compareTo(BigDecimal.ZERO) > 0
                     ? totalProfitLoss.divide(totalInvested, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
                     : BigDecimal.ZERO;
 
-            // Top performing assets
-            List<DashboardSummaryResponse.TopAssetDto> topAssets = assets.stream()
-                    .map(asset -> {
-                        BigDecimal invested = asset.getBuyingRate().multiply(asset.getQuantity());
-                        BigDecimal currentPrice = pricingService.getCurrentPrice(asset.getId());
-                        if (currentPrice == null) {
-                            currentPrice = asset.getBuyingRate();
-                        }
-                        BigDecimal currentValue = currentPrice.multiply(asset.getQuantity());
-                        BigDecimal returns = invested.compareTo(BigDecimal.ZERO) > 0
-                                ? currentValue.subtract(invested).divide(invested, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
-                                : BigDecimal.ZERO;
-                        return DashboardSummaryResponse.TopAssetDto.builder()
-                                .name(asset.getName())
-                                .category(asset.getCategory().name())
-                                .currentValue(currentValue)
-                                .returns(returns)
-                                .build();
-                    })
-                    .sorted((a, b) -> b.getReturns().compareTo(a.getReturns()))
-                    .limit(5)
-                    .collect(Collectors.toList());
+            List<DashboardSummaryResponse.TopAssetDto> allAssetsWithReturns = assets.stream()
+                .map(asset -> {
+                    BigDecimal invested = asset.getBuyingRate().multiply(asset.getQuantity());
+                    BigDecimal currentPrice = pricingService.getCurrentPrice(asset.getId());
+                    if (currentPrice == null) {
+                        currentPrice = asset.getBuyingRate();
+                    }
+                    BigDecimal currentValue = currentPrice.multiply(asset.getQuantity());
+                    BigDecimal returns = invested.compareTo(BigDecimal.ZERO) > 0
+                            ? currentValue.subtract(invested).divide(invested, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
+                            : BigDecimal.ZERO;
+                    return DashboardSummaryResponse.TopAssetDto.builder()
+                            .name(asset.getName())
+                            .category(asset.getCategory().name())
+                            .currentValue(currentValue)
+                            .returns(returns)
+                            .build();
+                })
+                .collect(Collectors.toList());
+
+            List<DashboardSummaryResponse.TopAssetDto> topAssets = allAssetsWithReturns.stream()
+                .sorted((a, b) -> b.getReturns().compareTo(a.getReturns()))
+                .limit(5)
+                .collect(Collectors.toList());
+            
+            List<DashboardSummaryResponse.TopAssetDto> worstAssets = allAssetsWithReturns.stream()
+                .sorted(Comparator.comparing(DashboardSummaryResponse.TopAssetDto::getReturns))
+                .limit(5)
+                .collect(Collectors.toList());
 
             // Portfolio performance
             Map<String, Double> portfolioMap = assets.stream()
@@ -244,6 +282,22 @@ public class DashboardServiceImpl implements DashboardService {
                     asset -> asset.getQuantity().doubleValue(),
                     Double::sum
                 ));
+            
+            com.app.portfolio.dto.pricing.PortfolioChartResponse todaysPerformance = pricingService.getPortfolioChart(portfolioMap, "1d", "1d");
+            BigDecimal todaysPL = BigDecimal.ZERO;
+            BigDecimal todaysPLPercentage = BigDecimal.ZERO;
+            
+            if (todaysPerformance != null && todaysPerformance.getData() != null && todaysPerformance.getData().size() > 1) {
+                var startValue = todaysPerformance.getData().get(0).getValue();
+                var endValue = todaysPerformance.getData().get(todaysPerformance.getData().size() - 1).getValue();
+                if(startValue != null && endValue != null) {
+                    todaysPL = BigDecimal.valueOf(endValue - startValue);
+                    if (startValue != 0) {
+                        todaysPLPercentage = todaysPL.divide(BigDecimal.valueOf(startValue), 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100));
+                    }
+                }
+            }
+
 
             List<String> labels;
             List<BigDecimal> performanceData;
@@ -283,6 +337,10 @@ public class DashboardServiceImpl implements DashboardService {
                             .data(performanceData)
                             .build())
                     .topAssets(topAssets)
+                    .worstAssets(worstAssets)
+                    .assetCategoryCount(assetCategoryCount)
+                    .todaysPL(todaysPL)
+                    .todaysPLPercentage(todaysPLPercentage)
                     .assetCategoryBreakdown(categoryBreakdown)
                     .build();
             

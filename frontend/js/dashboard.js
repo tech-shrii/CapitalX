@@ -1,6 +1,5 @@
 let pieChart = null;
 let lineChart = null;
-let barChart = null;
 let refreshIntervalId = null;
 let isModalOpen = false;
 
@@ -95,7 +94,6 @@ function refreshData() {
 function destroyCharts() {
     if (pieChart) { pieChart.destroy(); pieChart = null; }
     if (lineChart) { lineChart.destroy(); lineChart = null; }
-    if (barChart) { barChart.destroy(); barChart = null; }
 }
 
 function setupUser() {
@@ -170,6 +168,23 @@ async function loadDashboardData() {
         document.getElementById('totalPortfolioValue').textContent = formatCurrency(data.totalCurrentValue || 0, defaultCurrency);
         document.getElementById('totalReturns').textContent = formatCurrency(data.totalProfitLoss || 0, defaultCurrency);
         document.getElementById('totalInvestment').textContent = formatCurrency(data.totalInvested || 0, defaultCurrency);
+        document.getElementById('assetCategoryCount').textContent = data.assetCategoryCount || 0;
+
+        const todaysPLValue = data.todaysPL || 0;
+        const todaysPL = document.getElementById('todaysPL');
+        if (todaysPL) {
+            todaysPL.textContent = formatCurrency(todaysPLValue, defaultCurrency);
+            todaysPL.classList.toggle('positive', todaysPLValue >= 0);
+            todaysPL.classList.toggle('negative', todaysPLValue < 0);
+        }
+        
+        const todaysPLPercentageValue = data.todaysPLPercentage || 0;
+        const todaysPLPercentage = document.getElementById('todaysPLPercentage');
+        if (todaysPLPercentage) {
+            todaysPLPercentage.textContent = formatPercent(todaysPLPercentageValue);
+            todaysPLPercentage.classList.toggle('positive', todaysPLPercentageValue >= 0);
+            todaysPLPercentage.classList.toggle('negative', todaysPLPercentageValue < 0);
+        }
         
         const pnl = data.totalProfitLoss || 0;
         const pnlPercent = data.totalProfitLossPercent || 0;
@@ -181,7 +196,6 @@ async function loadDashboardData() {
         // Update charts
         updatePieChart(data.assetAllocation);
         updateLineChart(data.portfolioPerformance);
-        updateBarChart(data.assetCategoryBreakdown);
 
         // Update Top Performing Assets Table
         const topAssetsTable = document.getElementById('topAssetsTable');
@@ -193,6 +207,26 @@ async function loadDashboardData() {
                         <tr>
                             <td>${asset.name || 'N/A'}</td>
                             <td><span class="badge badge-blue">${asset.category || 'N/A'}</span></td>
+                            <td class="right">${formatCurrency(asset.currentValue || 0, asset.currency || defaultCurrency)}</td>
+                            <td class="right ${(asset.returns || 0) >= 0 ? 'positive' : 'negative'}">${formatPercent(asset.returns || 0)}</td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No assets found</td></tr>';
+                }
+            }
+        }
+        
+        // Update Worst Performing Assets Table
+        const worstAssetsTable = document.getElementById('worstAssetsTable');
+        if (worstAssetsTable) {
+            const tbody = worstAssetsTable.getElementsByTagName('tbody')[0];
+            if (tbody) {
+                if (data.worstAssets && data.worstAssets.length > 0) {
+                    tbody.innerHTML = data.worstAssets.map(asset => `
+                        <tr>
+                            <td>${asset.name || 'N/A'}</td>
+                            <td><span class="badge badge-red">${asset.category || 'N/A'}</span></td>
                             <td class="right">${formatCurrency(asset.currentValue || 0, asset.currency || defaultCurrency)}</td>
                             <td class="right ${(asset.returns || 0) >= 0 ? 'positive' : 'negative'}">${formatPercent(asset.returns || 0)}</td>
                         </tr>
@@ -259,39 +293,16 @@ function updateLineChart(portfolioPerformance) {
                     tension: .4,
                     fill: false
                 }]
+            },
+            options: {
+                aspectRatio: 1 // Ensure the chart maintains a square aspect ratio
             }
         });
         console.log('[DEBUG] Line chart created');
     }
 }
 
-function updateBarChart(assetCategoryBreakdown) {
-    const barCtx = document.getElementById('bar');
-    if (!barCtx) return;
 
-    const labels = Object.keys(assetCategoryBreakdown || {});
-    const data = Object.values(assetCategoryBreakdown || {}).map(v => Number(v));
-
-    if (barChart) {
-        barChart.data.labels = labels;
-        barChart.data.datasets[0].data = data;
-        barChart.update();
-        console.log('[DEBUG] Bar chart updated');
-    } else {
-        barChart = new Chart(barCtx.getContext('2d'), {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Value',
-                    data: data,
-                    backgroundColor: '#3b82f6'
-                }]
-            }
-        });
-        console.log('[DEBUG] Bar chart created');
-    }
-}
 
 function setupClientManagement() {
     loadClients();

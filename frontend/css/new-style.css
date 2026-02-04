@@ -92,6 +92,10 @@ body{
   margin:8px 0;
 }
 
+.card h3 {
+    margin-bottom: 1rem;
+}
+
 .positive{color:#16a34a;}
 .negative{color:#dc2626;}
 

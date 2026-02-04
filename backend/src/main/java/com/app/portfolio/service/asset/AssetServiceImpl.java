@@ -52,7 +52,10 @@ public class AssetServiceImpl implements AssetService {
         return assetRepository.findByClientIdOrderByPurchaseDateTimeDesc(clientId)
                 .stream()
                 .map(asset -> {
-                    BigDecimal currentPrice = asset.isSold() ? asset.getSellingRate() : pricingService.getCurrentPrice(asset.getId());
+                    // Use symbol-based pricing if available, fallback to asset ID
+                    BigDecimal currentPrice = (asset.getSymbol() != null && !asset.getSymbol().isEmpty())
+                            ? pricingService.getCurrentPriceBySymbolAsBigDecimal(asset.getSymbol())
+                            : pricingService.getCurrentPrice(asset.getId());
                     BigDecimal profitLoss = calculateProfitLoss(asset, currentPrice);
                     BigDecimal profitLossPercent = calculateProfitLossPercent(asset, currentPrice);
                     return assetMapper.toResponse(asset, currentPrice, profitLoss, profitLossPercent);
@@ -70,7 +73,10 @@ public class AssetServiceImpl implements AssetService {
         return clients.stream()
                 .flatMap(client -> assetRepository.findByClientIdOrderByPurchaseDateTimeDesc(client.getId()).stream())
                 .map(asset -> {
-                    BigDecimal currentPrice = asset.isSold() ? asset.getSellingRate() : pricingService.getCurrentPrice(asset.getId());
+                    // Use symbol-based pricing if available, fallback to asset ID
+                    BigDecimal currentPrice = (asset.getSymbol() != null && !asset.getSymbol().isEmpty())
+                            ? pricingService.getCurrentPriceBySymbolAsBigDecimal(asset.getSymbol())
+                            : pricingService.getCurrentPrice(asset.getId());
                     BigDecimal profitLoss = calculateProfitLoss(asset, currentPrice);
                     BigDecimal profitLossPercent = calculateProfitLossPercent(asset, currentPrice);
                     return assetMapper.toResponse(asset, currentPrice, profitLoss, profitLossPercent);
@@ -86,7 +92,10 @@ public class AssetServiceImpl implements AssetService {
         if (!assetRepository.existsByIdAndClientUserId(id, userId)) {
             throw new ResourceNotFoundException("Asset", id);
         }
-        BigDecimal currentPrice = asset.isSold() ? asset.getSellingRate() : pricingService.getCurrentPrice(asset.getId());
+        // Use symbol-based pricing if available, fallback to asset ID
+        BigDecimal currentPrice = (asset.getSymbol() != null && !asset.getSymbol().isEmpty())
+                ? pricingService.getCurrentPriceBySymbolAsBigDecimal(asset.getSymbol())
+                : pricingService.getCurrentPrice(asset.getId());
         BigDecimal profitLoss = calculateProfitLoss(asset, currentPrice);
         BigDecimal profitLossPercent = calculateProfitLossPercent(asset, currentPrice);
         return assetMapper.toResponse(asset, currentPrice, profitLoss, profitLossPercent);
@@ -117,7 +126,7 @@ public class AssetServiceImpl implements AssetService {
         }
         asset = assetMapper.toEntity(request, asset);
         asset = assetRepository.save(asset);
-        BigDecimal currentPrice = asset.isSold() ? asset.getSellingRate() : pricingService.getCurrentPrice(asset.getId());
+        BigDecimal currentPrice = pricingService.getCurrentPrice(asset.getId());
         BigDecimal profitLoss = calculateProfitLoss(asset, currentPrice);
         BigDecimal profitLossPercent = calculateProfitLossPercent(asset, currentPrice);
         return assetMapper.toResponse(asset, currentPrice, profitLoss, profitLossPercent);
@@ -147,7 +156,10 @@ public class AssetServiceImpl implements AssetService {
 
         List<AssetResponse> assetResponses = assets.stream()
                 .map(asset -> {
-                    BigDecimal currentPrice = asset.isSold() ? asset.getSellingRate() : pricingService.getCurrentPrice(asset.getId());
+                    // Use symbol-based pricing if available, fallback to asset ID
+                    BigDecimal currentPrice = (asset.getSymbol() != null && !asset.getSymbol().isEmpty())
+                            ? pricingService.getCurrentPriceBySymbolAsBigDecimal(asset.getSymbol())
+                            : pricingService.getCurrentPrice(asset.getId());
                     BigDecimal profitLoss = calculateProfitLoss(asset, currentPrice);
                     BigDecimal profitLossPercent = calculateProfitLossPercent(asset, currentPrice);
                     return assetMapper.toResponse(asset, currentPrice, profitLoss, profitLossPercent);
@@ -156,7 +168,7 @@ public class AssetServiceImpl implements AssetService {
 
         for (Asset asset : assets) {
             BigDecimal invested = asset.getBuyingRate().multiply(asset.getQuantity());
-            BigDecimal currentPrice = asset.isSold() ? asset.getSellingRate() : pricingService.getCurrentPrice(asset.getId());
+            BigDecimal currentPrice = pricingService.getCurrentPrice(asset.getId());
             BigDecimal currentValue = currentPrice.multiply(asset.getQuantity());
             totalInvested = totalInvested.add(invested);
             totalCurrentValue = totalCurrentValue.add(currentValue);

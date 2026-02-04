@@ -73,6 +73,29 @@ window.showAddAssetModal = function(clientId) {
     window.currentClientIdForAsset = clientId;
     const modal = document.getElementById('addAssetModal');
     if (modal) {
+        // Setup checkbox toggle for selling info
+        const soldCheckbox = document.getElementById('assetSold');
+        const sellingInfo = document.getElementById('selling-info-client');
+        const sellingRateInput = document.getElementById('assetSellingRate');
+        const sellingDateTimeInput = document.getElementById('assetSellingDateTime');
+        
+        if (soldCheckbox && sellingInfo) {
+            // Ensure selling section is hidden initially
+            sellingInfo.classList.add('hidden');
+            soldCheckbox.checked = false;
+            if (sellingRateInput) sellingRateInput.value = '';
+            if (sellingDateTimeInput) sellingDateTimeInput.value = '';
+            
+            // Add event listener for the checkbox to toggle selling info visibility
+            soldCheckbox.onchange = () => {
+                sellingInfo.classList.toggle('hidden', !soldCheckbox.checked);
+                if (!soldCheckbox.checked) {
+                    if (sellingRateInput) sellingRateInput.value = '';
+                    if (sellingDateTimeInput) sellingDateTimeInput.value = '';
+                }
+            };
+        }
+        
         modal.classList.remove('hidden');
     }
 };

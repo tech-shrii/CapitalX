@@ -43,8 +43,10 @@ public class StatementServiceImpl implements StatementService {
         String fileName = "Statement_" + client.getName() + "_" + 
                 java.time.LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + ".pdf";
         
-        String emailTo = request.getEmailTo() != null ? request.getEmailTo() : client.getEmail();
-        emailService.sendStatementEmail(emailTo, client.getName(), pdfBytes, fileName);
+        String emailTo = request.getEmailTo();
+        if (emailTo != null && !emailTo.trim().isEmpty()) {
+            emailService.sendStatementEmail(emailTo, client.getName(), pdfBytes, fileName);
+        }
     }
 
     private byte[] generatePdf(Client client, StatementRequest.StatementType statementType) {
@@ -100,7 +102,11 @@ public class StatementServiceImpl implements StatementService {
 
         for (Asset asset : assets) {
             BigDecimal invested = asset.getBuyingRate().multiply(asset.getQuantity());
-            BigDecimal currentPrice = asset.isSold() ? asset.getSellingRate() : pricingService.getCurrentPrice(asset.getId());
+            // Use symbol-based pricing if available, fallback to asset ID
+            BigDecimal currentPrice = asset.isSold() ? asset.getSellingRate() 
+                    : (asset.getSymbol() != null && !asset.getSymbol().isEmpty())
+                    ? pricingService.getCurrentPriceBySymbolAsBigDecimal(asset.getSymbol())
+                    : pricingService.getCurrentPrice(asset.getId());
             if (currentPrice == null) {
                 currentPrice = asset.getBuyingRate();
             }
@@ -160,7 +166,11 @@ public class StatementServiceImpl implements StatementService {
         table.addCell(new com.lowagie.text.Cell(new Phrase("Purchase Date & Time", headerFont)));
 
         for (Asset asset : assets) {
-            BigDecimal finalPrice = asset.isSold() ? asset.getSellingRate() : pricingService.getCurrentPrice(asset.getId());
+            // Use symbol-based pricing if available, fallback to asset ID
+            BigDecimal finalPrice = asset.isSold() ? asset.getSellingRate() 
+                    : (asset.getSymbol() != null && !asset.getSymbol().isEmpty())
+                    ? pricingService.getCurrentPriceBySymbolAsBigDecimal(asset.getSymbol())
+                    : pricingService.getCurrentPrice(asset.getId());
             if(finalPrice == null) {
                 finalPrice = asset.getBuyingRate();
             }

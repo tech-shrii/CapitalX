@@ -57,6 +57,14 @@ document.addEventListener('DOMContentLoaded', () => {
             isModalOpen = false;
         }
     });
+
+    const logoutBtnHeader = document.getElementById('logoutBtnHeader');
+    if (logoutBtnHeader) {
+        logoutBtnHeader.addEventListener('click', () => {
+            localStorage.clear();
+            window.location.href = '../index.html';
+        });
+    }
 });
 
 let currentClientId = 'main'; // 'main' for the user's own portfolio
@@ -273,14 +281,18 @@ function updateLineChart(portfolioPerformance) {
     const lineCtx = document.getElementById('line');
     if (!lineCtx) return;
 
+    console.log('[DEBUG] updateLineChart called with:', portfolioPerformance);
     const labels = portfolioPerformance?.labels || [];
     const data = portfolioPerformance?.data?.map(v => Number(v)) || [];
+    console.log('[DEBUG] Processed labels:', labels.length, 'data points:', data.length);
+    console.log('[DEBUG] First few labels:', labels.slice(0, 5));
+    console.log('[DEBUG] First few data values:', data.slice(0, 5));
 
     if (lineChart) {
         lineChart.data.labels = labels;
         lineChart.data.datasets[0].data = data;
         lineChart.update();
-        console.log('[DEBUG] Line chart updated');
+        console.log('[DEBUG] Line chart updated with', labels.length, 'data points');
     } else {
         lineChart = new Chart(lineCtx.getContext('2d'), {
             type: 'line',
@@ -469,6 +481,8 @@ async function editAsset(assetId) {
             return;
         }
 
+        document.getElementById('assetModalTitle').textContent = 'Edit Asset';
+        document.getElementById('assetFormSubmitBtn').textContent = 'Update Asset';
         modal.classList.remove('hidden');
 
         // Populate form fields
@@ -510,6 +524,10 @@ async function editAsset(assetId) {
         // Add event listener for the checkbox
         soldCheckbox.onchange = () => {
             sellingInfo.classList.toggle('hidden', !soldCheckbox.checked);
+            if (!soldCheckbox.checked) {
+                sellingRateInput.value = '';
+                sellingDateTimeInput.value = '';
+            }
         };
 
         // Handle form submission
@@ -720,6 +738,7 @@ function setupSettings() {
             addClientSubmitBtn.textContent = 'Import CSV & Finish';
             addClientForm.onsubmit = (e) => handleCsvImportSubmit(e, newClient.id); // Change submit handler
             loadClientsForSettings(); // Refresh client list in settings
+            loadClientsForSwitcher();
         } catch (error) {
             alert('Error adding client: ' + error.message);
             isModalOpen = false;
@@ -755,6 +774,7 @@ function setupSettings() {
                 isModalOpen = false;
                 addClientForm.reset();
                 loadClientsForSettings(); // Refresh client list in settings
+                loadClientsForSwitcher();
             } catch (error) {
                 console.error('[ERROR] CSV import failed:', error);
                 console.error('[ERROR] Error message:', error.message);
@@ -768,6 +788,7 @@ function setupSettings() {
             isModalOpen = false;
             addClientForm.reset();
             loadClientsForSettings(); // Refresh client list in settings
+            loadClientsForSwitcher();
         }
     }
 
@@ -884,10 +905,10 @@ async function loadAssetCategoryTab(category) {
                 <thead>
                     <tr>
                         <th>Asset Name</th>
-                        <th>Symbol</th>
                         <th>Quantity</th>
                         <th>Buying Rate</th>
                         <th>Current Price</th>
+                        <th>Sell Price</th>
                         <th>P&L</th>
                         <th>P&L %</th>
                         <th>Actions</th>
@@ -897,7 +918,7 @@ async function loadAssetCategoryTab(category) {
                     <tr><td colspan="8" style="text-align:center;">Loading...</td></tr>
                 </tbody>
             </table>
-            <div id="pagination-controls" style="display: flex; justify-content: center; margin-top: 20px;"></div>
+            <div id="pagination-controls" style="display: flex; justify-content: center; margin-top: 20px; gap: 5px;"></div>
         </div>
     `;
 
@@ -955,10 +976,10 @@ async function loadAssetCategoryTab(category) {
                 return `
                 <tr data-asset-id="${asset.id}">
                     <td>${asset.name}</td>
-                    <td>${asset.symbol}</td>
                     <td>${asset.quantity}</td>
                     <td>${formatCurrency(asset.buyingRate, currency)}</td>
                     <td>${formatCurrency(asset.currentPrice, currency)}</td>
+                    <td>${asset.sold ? formatCurrency(asset.sellingRate, currency) : 'Not Sold'}</td>
                     <td class="${asset.profitLoss >= 0 ? 'positive' : 'negative'}">${formatCurrency(asset.profitLoss, currency)}</td>
                     <td class="${asset.profitLossPercent >= 0 ? 'positive' : 'negative'}">${formatPercent(asset.profitLossPercent)}</td>
                     <td>
@@ -1073,7 +1094,7 @@ async function loadStatementTab() {
                 </div>
                 <div class="form-group">
                     <label>Email To</label>
-                    <input type="email" id="statementEmail" placeholder="Leave empty to use client email" class="form-control">
+                    <input type="email" id="statementEmail" placeholder="Enter email to send statement" class="form-control">
                 </div>
                 <button type="submit" class="btn btn-primary">Generate & Send Statement</button>
             </form>
@@ -1087,8 +1108,14 @@ async function loadStatementTab() {
         if (select) {
             select.innerHTML = '<option value="">Select a client</option>' +
                 clients.map(client => 
-                    `<option value="${client.id}">${client.name} (${client.email})</option>`
+                    `<option value="${client.id}" data-email="${client.email}">${client.name}</option>`
                 ).join('');
+            
+            select.addEventListener('change', (e) => {
+                const selectedOption = e.target.options[e.target.selectedIndex];
+                const email = selectedOption.getAttribute('data-email');
+                document.getElementById('statementEmail').value = email || '';
+            });
         }
     } catch (error) {
         console.error('Error loading clients for statement form:', error);
@@ -1119,56 +1146,60 @@ async function loadStatementTab() {
 
 async function addAsset(category) {
     console.log('[DEBUG] addAsset called with category:', category);
-    console.log('[DEBUG] isModalOpen before:', isModalOpen);
-    
-    isModalOpen = true; // Prevent refresh while modal is open
-    console.log('[DEBUG] isModalOpen after setting:', isModalOpen);
-    
+    isModalOpen = true;
+
     const modal = document.getElementById('editAssetModal');
-    console.log('[DEBUG] Modal element found:', !!modal);
     if (!modal) {
         console.error('[ERROR] editAssetModal not found in DOM');
         isModalOpen = false;
         return;
     }
-    
-    console.log('[DEBUG] Modal classes before:', modal.className);
-    modal.classList.remove('hidden');
-    console.log('[DEBUG] Modal classes after removing hidden:', modal.className);
-    
-    // Force display and check visibility
-    const computedStyle = window.getComputedStyle(modal);
-    console.log('[DEBUG] Modal computed display:', computedStyle.display);
-    console.log('[DEBUG] Modal computed visibility:', computedStyle.visibility);
-    console.log('[DEBUG] Modal computed z-index:', computedStyle.zIndex);
-    console.log('[DEBUG] Modal computed opacity:', computedStyle.opacity);
-    console.log('[DEBUG] Modal offsetParent:', modal.offsetParent);
-    console.log('[DEBUG] Modal offsetWidth:', modal.offsetWidth);
-    console.log('[DEBUG] Modal offsetHeight:', modal.offsetHeight);
-    
+
+    document.getElementById('assetModalTitle').textContent = 'Add Asset';
+    document.getElementById('assetFormSubmitBtn').textContent = 'Add Asset';
+
     const form = document.getElementById('editAssetForm');
-    console.log('[DEBUG] Form element found:', !!form);
-    if (!form) {
-        console.error('[ERROR] editAssetForm not found in DOM');
-        isModalOpen = false;
-        modal.classList.add('hidden');
-        return;
-    }
     form.reset();
+
     document.getElementById('editAssetId').value = ''; // Clear ID for new asset
     document.getElementById('editAssetCategory').value = category.toUpperCase();
-    console.log('[DEBUG] Form reset and category set');
+    
+    // Ensure selling section is hidden for new assets
+    const sellingInfo = document.getElementById('selling-info');
+    const soldCheckbox = document.getElementById('editAssetSold');
+    const sellingRateInput = document.getElementById('editAssetSellingRate');
+    const sellingDateTimeInput = document.getElementById('editAssetSellingDateTime');
+    
+    sellingInfo.classList.add('hidden');
+    soldCheckbox.checked = false;
+    sellingRateInput.value = '';
+    sellingDateTimeInput.value = '';
+
+    // Add event listener for the checkbox to toggle selling info visibility
+    soldCheckbox.onchange = () => {
+        sellingInfo.classList.toggle('hidden', !soldCheckbox.checked);
+        if (!soldCheckbox.checked) {
+            sellingRateInput.value = '';
+            sellingDateTimeInput.value = '';
+        }
+    };
+
+    modal.classList.remove('hidden');
 
     form.onsubmit = async (e) => {
         e.preventDefault();
+        const purchaseDateTimeValue = document.getElementById('editAssetPurchaseDateTime').value;
         const assetData = {
             name: document.getElementById('editAssetName').value,
             category: document.getElementById('editAssetCategory').value,
             symbol: document.getElementById('editAssetSymbol').value,
             quantity: parseFloat(document.getElementById('editAssetQuantity').value),
             buyingRate: parseFloat(document.getElementById('editAssetBuyingRate').value),
-            purchaseDate: document.getElementById('editAssetPurchaseDate').value,
+            purchaseDateTime: purchaseDateTimeValue ? `${purchaseDateTimeValue}:00Z` : null,
             currency: document.getElementById('editAssetCurrency').value,
+            sold: document.getElementById('editAssetSold').checked,
+            sellingRate: soldCheckbox.checked && sellingRateInput.value ? parseFloat(sellingRateInput.value) : null,
+            sellingDateTime: soldCheckbox.checked && sellingDateTimeInput.value ? `${sellingDateTimeInput.value}:00Z` : null,
         };
 
         try {
@@ -1178,10 +1209,6 @@ async function addAsset(category) {
             const result = await apiCall(url, 'POST', assetData);
             console.log('[DEBUG] Asset added successfully:', result);
             modal.classList.add('hidden');
-            modal.style.removeProperty('display');
-            modal.style.removeProperty('visibility');
-            modal.style.removeProperty('opacity');
-            modal.style.removeProperty('z-index');
             isModalOpen = false;
             form.reset();
             form.onsubmit = null; // Reset submit handler
@@ -1196,12 +1223,7 @@ async function addAsset(category) {
     const closeModalBtn = document.getElementById('closeEditAssetModal');
     if (closeModalBtn) {
         closeModalBtn.onclick = () => {
-            console.log('[DEBUG] Close modal button clicked (addAsset)');
             modal.classList.add('hidden');
-            modal.style.removeProperty('display');
-            modal.style.removeProperty('visibility');
-            modal.style.removeProperty('opacity');
-            modal.style.removeProperty('z-index');
             isModalOpen = false;
             form.reset();
             form.onsubmit = null;

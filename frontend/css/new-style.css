@@ -400,7 +400,7 @@ td{
 
 .modal-content {
     background-color: #fefefe;
-    margin: 15% auto; /* 15% from the top and centered */
+    margin: 3% auto; /* 15% from the top and centered */
     padding: 20px;
     border: 1px solid #888;
     width: 80%; /* Could be more or less, depending on screen size */
@@ -557,4 +557,71 @@ td{
 
 .hidden {
     display: none !important;
+}
+
+/* CHECKBOX */
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 500;
+    color: #0f172a;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    gap: 12px;
+    margin-bottom: 0;
+    white-space: nowrap;
+    padding: 8px 0;
+    transition: color 0.2s ease;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+    accent-color: #2563eb;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.checkbox-label span {
+    line-height: 1.5;
+    flex-shrink: 0;
+    padding-left: 2px;
+}
+
+.checkbox-label:hover {
+    color: #2563eb;
+}
+
+.checkbox-label:hover input[type="checkbox"] {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.checkbox-label input[type="checkbox"]:checked {
+    accent-color: #2563eb;
+}
+
+.checkbox-label input[type="checkbox"]:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
+/* Form group containing checkbox - adjust spacing */
+.form-group:has(.checkbox-label) {
+    margin-bottom: 1rem;
+    padding: 4px 0;
+}
+
+/* Fallback for browsers that don't support :has() */
+.form-group .checkbox-label {
+    margin-top: 0;
+    margin-bottom: 0;
 }

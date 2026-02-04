@@ -36,7 +36,8 @@ body{
 }
 
 .user-select select{
-  padding:8px 14px;
+  padding:12px 24px;
+  font-size: 16px;
   border-radius:10px;
   border:1px solid #dbe3f0;
 }
@@ -65,6 +66,11 @@ body{
     display: flex;
     align-items: center;
     gap: 1rem;
+}
+
+#logoutBtn {
+    padding: 12px 24px;
+    font-size: 16px;
 }
 
 /* NAV */

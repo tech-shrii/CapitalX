@@ -58,7 +58,12 @@ public class ExcelServiceImpl implements ExcelService {
             String symbol = getCellValueAsString(row.getCell(3));
             BigDecimal quantity = getCellValueAsBigDecimal(row.getCell(4));
             BigDecimal buyingRate = getCellValueAsBigDecimal(row.getCell(5));
-            LocalDate purchaseDate = getCellValueAsDate(row.getCell(6));
+            java.time.Instant purchaseDateTime = getCellValueAsDate(row.getCell(6)).atStartOfDay().toInstant(java.time.ZoneOffset.UTC);
+            String currency = getCellValueAsString(row.getCell(7));
+            BigDecimal sellingRate = getCellValueAsBigDecimal(row.getCell(8));
+            java.time.Instant sellingDateTime = row.getCell(9) != null ? getCellValueAsDate(row.getCell(9)).atStartOfDay().toInstant(java.time.ZoneOffset.UTC) : null;
+            boolean sold = row.getCell(10) != null && row.getCell(10).getBooleanCellValue();
+
 
             if (clientName == null || assetName == null) continue;
 
@@ -75,6 +80,7 @@ public class ExcelServiceImpl implements ExcelService {
                     client.setUser(user);
                     client.setName(clientName);
                     client.setEmail(clientName.toLowerCase().replaceAll("\\s+", "") + "@client.com");
+                    client.setCurrency(currency != null ? currency : "USD");
                     client = clientRepository.save(client);
                 }
                 clientMap.put(clientName, client);
@@ -95,7 +101,11 @@ public class ExcelServiceImpl implements ExcelService {
             asset.setSymbol(symbol != null ? symbol : "");
             asset.setQuantity(quantity);
             asset.setBuyingRate(buyingRate);
-            asset.setPurchaseDate(purchaseDate != null ? purchaseDate : LocalDate.now());
+            asset.setPurchaseDateTime(purchaseDateTime);
+            asset.setCurrency(currency);
+            asset.setSellingRate(sellingRate);
+            asset.setSellingDateTime(sellingDateTime);
+            asset.setSold(sold);
             assetRepository.save(asset);
         }
 
@@ -115,7 +125,7 @@ public class ExcelServiceImpl implements ExcelService {
 
         // Header row
         Row headerRow = sheet.createRow(0);
-        String[] headers = {"Client Name", "Asset Name", "Category", "Symbol", "Quantity", "Buying Rate", "Purchase Date"};
+        String[] headers = {"Client Name", "Asset Name", "Category", "Symbol", "Quantity", "Buying Rate", "PurchaseDateTime", "Currency", "Selling Rate", "Selling Date Time", "Sold"};
         for (int i = 0; i < headers.length; i++) {
             Cell cell = headerRow.createCell(i);
             cell.setCellValue(headers[i]);
@@ -128,7 +138,7 @@ public class ExcelServiceImpl implements ExcelService {
 
         int rowNum = 1;
         for (Client client : clients) {
-            List<Asset> assets = assetRepository.findByClientIdOrderByPurchaseDateDesc(client.getId());
+            List<Asset> assets = assetRepository.findByClientIdOrderByPurchaseDateTimeDesc(client.getId());
             for (Asset asset : assets) {
                 Row row = sheet.createRow(rowNum++);
                 row.createCell(0).setCellValue(client.getName());
@@ -137,7 +147,15 @@ public class ExcelServiceImpl implements ExcelService {
                 row.createCell(3).setCellValue(asset.getSymbol() != null ? asset.getSymbol() : "");
                 row.createCell(4).setCellValue(asset.getQuantity().doubleValue());
                 row.createCell(5).setCellValue(asset.getBuyingRate().doubleValue());
-                row.createCell(6).setCellValue(asset.getPurchaseDate().toString());
+                row.createCell(6).setCellValue(asset.getPurchaseDateTime().toString());
+                row.createCell(7).setCellValue(asset.getCurrency());
+                if (asset.getSellingRate() != null) {
+                    row.createCell(8).setCellValue(asset.getSellingRate().doubleValue());
+                }
+                if (asset.getSellingDateTime() != null) {
+                    row.createCell(9).setCellValue(asset.getSellingDateTime().toString());
+                }
+                row.createCell(10).setCellValue(asset.isSold());
             }
         }
 

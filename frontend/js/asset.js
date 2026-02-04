@@ -37,14 +37,20 @@ async function handleAddAsset(e) {
         return;
     }
 
+    const purchaseDateTimeValue = document.getElementById('assetPurchaseDateTime').value;
+    const sellingDateTimeValue = document.getElementById('assetSellingDateTime').value;
+
     const assetData = {
         name: document.getElementById('assetName').value,
         category: document.getElementById('assetCategory').value,
         symbol: document.getElementById('assetSymbol').value,
         quantity: parseFloat(document.getElementById('assetQuantity').value),
         buyingRate: parseFloat(document.getElementById('assetBuyingRate').value),
-        purchaseDate: document.getElementById('assetPurchaseDate').value,
+        purchaseDateTime: purchaseDateTimeValue ? `${purchaseDateTimeValue}:00Z` : null,
         currency: document.getElementById('assetCurrency')?.value || 'USD',
+        sold: document.getElementById('assetSold').checked,
+        sellingRate: parseFloat(document.getElementById('assetSellingRate').value) || null,
+        sellingDateTime: sellingDateTimeValue ? `${sellingDateTimeValue}:00Z` : null,
     };
 
     try {

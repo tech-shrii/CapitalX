@@ -25,9 +25,9 @@
   <div class="header-actions">
     <!-- <button id="addClientBtnHeader" class="btn btn-primary">+ Add Client</button> -->
     <div class="user-select">
-      Managing:
+      Client:
       <select id="clientSwitcher">
-        <option>Main Portfolio</option>
+        <option>Combined Portfolio</option>
       </select>
     </div>
   </div>
@@ -85,8 +85,8 @@
                 <input type="number" id="editAssetBuyingRate" step="0.01" required class="form-control">
             </div>
             <div class="form-group">
-                <label>Purchase Date</label>
-                <input type="date" id="editAssetPurchaseDate" required class="form-control">
+                <label>Purchase Date & Time</label>
+                <input type="datetime-local" id="editAssetPurchaseDateTime" required class="form-control">
             </div>
             <div class="form-group">
                 <label>Currency</label>
@@ -100,6 +100,23 @@
                     <option value="CAD">CAD</option>
                     <option value="AUD">AUD</option>
                 </select>
+            </div>
+            <hr>
+            <div class="form-group">
+                <label for="editAssetSold" class="checkbox-label">
+                    <input type="checkbox" id="editAssetSold">
+                    Asset is Sold
+                </label>
+            </div>
+            <div id="selling-info" class="hidden">
+                <div class="form-group">
+                    <label>Selling Rate</label>
+                    <input type="number" id="editAssetSellingRate" step="0.01" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Selling Date & Time</label>
+                    <input type="datetime-local" id="editAssetSellingDateTime" class="form-control">
+                </div>
             </div>
             <button type="submit" class="btn btn-primary">Update Asset</button>
         </form>

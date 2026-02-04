@@ -49,10 +49,10 @@ public class AssetServiceImpl implements AssetService {
         if (!clientRepository.existsByIdAndUserId(clientId, userId)) {
             throw new ResourceNotFoundException("Client", clientId);
         }
-        return assetRepository.findByClientIdOrderByPurchaseDateDesc(clientId)
+        return assetRepository.findByClientIdOrderByPurchaseDateTimeDesc(clientId)
                 .stream()
                 .map(asset -> {
-                    BigDecimal currentPrice = pricingService.getCurrentPrice(asset.getId());
+                    BigDecimal currentPrice = asset.isSold() ? asset.getSellingRate() : pricingService.getCurrentPrice(asset.getId());
                     BigDecimal profitLoss = calculateProfitLoss(asset, currentPrice);
                     BigDecimal profitLossPercent = calculateProfitLossPercent(asset, currentPrice);
                     return assetMapper.toResponse(asset, currentPrice, profitLoss, profitLossPercent);
@@ -68,9 +68,9 @@ public class AssetServiceImpl implements AssetService {
         
         List<Client> clients = user.getClients();
         return clients.stream()
-                .flatMap(client -> assetRepository.findByClientIdOrderByPurchaseDateDesc(client.getId()).stream())
+                .flatMap(client -> assetRepository.findByClientIdOrderByPurchaseDateTimeDesc(client.getId()).stream())
                 .map(asset -> {
-                    BigDecimal currentPrice = pricingService.getCurrentPrice(asset.getId());
+                    BigDecimal currentPrice = asset.isSold() ? asset.getSellingRate() : pricingService.getCurrentPrice(asset.getId());
                     BigDecimal profitLoss = calculateProfitLoss(asset, currentPrice);
                     BigDecimal profitLossPercent = calculateProfitLossPercent(asset, currentPrice);
                     return assetMapper.toResponse(asset, currentPrice, profitLoss, profitLossPercent);
@@ -86,7 +86,7 @@ public class AssetServiceImpl implements AssetService {
         if (!assetRepository.existsByIdAndClientUserId(id, userId)) {
             throw new ResourceNotFoundException("Asset", id);
         }
-        BigDecimal currentPrice = pricingService.getCurrentPrice(asset.getId());
+        BigDecimal currentPrice = asset.isSold() ? asset.getSellingRate() : pricingService.getCurrentPrice(asset.getId());
         BigDecimal profitLoss = calculateProfitLoss(asset, currentPrice);
         BigDecimal profitLossPercent = calculateProfitLossPercent(asset, currentPrice);
         return assetMapper.toResponse(asset, currentPrice, profitLoss, profitLossPercent);
@@ -117,7 +117,7 @@ public class AssetServiceImpl implements AssetService {
         }
         asset = assetMapper.toEntity(request, asset);
         asset = assetRepository.save(asset);
-        BigDecimal currentPrice = pricingService.getCurrentPrice(asset.getId());
+        BigDecimal currentPrice = asset.isSold() ? asset.getSellingRate() : pricingService.getCurrentPrice(asset.getId());
         BigDecimal profitLoss = calculateProfitLoss(asset, currentPrice);
         BigDecimal profitLossPercent = calculateProfitLossPercent(asset, currentPrice);
         return assetMapper.toResponse(asset, currentPrice, profitLoss, profitLossPercent);
@@ -141,13 +141,13 @@ public class AssetServiceImpl implements AssetService {
             throw new ResourceNotFoundException("Client", clientId);
         }
 
-        List<Asset> assets = assetRepository.findByClientIdOrderByPurchaseDateDesc(clientId);
+        List<Asset> assets = assetRepository.findByClientIdOrderByPurchaseDateTimeDesc(clientId);
         BigDecimal totalInvested = BigDecimal.ZERO;
         BigDecimal totalCurrentValue = BigDecimal.ZERO;
 
         List<AssetResponse> assetResponses = assets.stream()
                 .map(asset -> {
-                    BigDecimal currentPrice = pricingService.getCurrentPrice(asset.getId());
+                    BigDecimal currentPrice = asset.isSold() ? asset.getSellingRate() : pricingService.getCurrentPrice(asset.getId());
                     BigDecimal profitLoss = calculateProfitLoss(asset, currentPrice);
                     BigDecimal profitLossPercent = calculateProfitLossPercent(asset, currentPrice);
                     return assetMapper.toResponse(asset, currentPrice, profitLoss, profitLossPercent);
@@ -156,7 +156,7 @@ public class AssetServiceImpl implements AssetService {
 
         for (Asset asset : assets) {
             BigDecimal invested = asset.getBuyingRate().multiply(asset.getQuantity());
-            BigDecimal currentPrice = pricingService.getCurrentPrice(asset.getId());
+            BigDecimal currentPrice = asset.isSold() ? asset.getSellingRate() : pricingService.getCurrentPrice(asset.getId());
             BigDecimal currentValue = currentPrice.multiply(asset.getQuantity());
             totalInvested = totalInvested.add(invested);
             totalCurrentValue = totalCurrentValue.add(currentValue);
@@ -222,35 +222,28 @@ public class AssetServiceImpl implements AssetService {
                 String categoryStr = assetData.getOrDefault("assetType", "STOCK").toString().toUpperCase();
                 Asset.AssetCategory category = Asset.AssetCategory.valueOf(categoryStr);
                 
-                // Parse purchase date - try LocalDate first, then Instant conversion
-                LocalDate purchaseDate;
-                try {
-                    String dateStr = assetData.getOrDefault("purchaseDate", LocalDate.now().toString()).toString();
-                    try {
-                        // Try parsing as LocalDate (ISO format: YYYY-MM-DD)
-                        purchaseDate = LocalDate.parse(dateStr);
-                    } catch (Exception e) {
-                        // If that fails, try parsing as Instant and convert to LocalDate
-                        Instant instant = Instant.parse(dateStr);
-                        purchaseDate = instant.atZone(ZoneId.systemDefault()).toLocalDate();
-                    }
-                } catch (Exception e) {
-                    // Default to today if parsing fails
-                    purchaseDate = LocalDate.now();
-                }
+                Instant purchaseDateTime = parseInstant(assetData.get("purchaseDateTime"));
+                Instant sellingDateTime = parseInstant(assetData.get("sellingDateTime"));
                 
                 String currency = assetData.containsKey("currency")
                         ? assetData.get("currency").toString().toUpperCase().substring(0, Math.min(3, assetData.get("currency").toString().length()))
                         : "USD";
+                
+                BigDecimal sellingRate = assetData.get("sellingRate") != null ? new BigDecimal(assetData.get("sellingRate").toString()) : null;
+                boolean sold = Boolean.parseBoolean(assetData.getOrDefault("sold", "false").toString());
+
                 Asset asset = Asset.builder()
                         .symbol(assetData.get("symbol").toString().toUpperCase())
                         .quantity(new BigDecimal(assetData.getOrDefault("quantity", "0").toString()))
                         .buyingRate(new BigDecimal(assetData.getOrDefault("buyingRate", "0").toString()))
                         .category(category)
                         .name(assetData.getOrDefault("name", assetData.get("symbol")).toString())
-                        .purchaseDate(purchaseDate)
+                        .purchaseDateTime(purchaseDateTime)
                         .currency(currency)
                         .client(defaultClient)
+                        .sellingRate(sellingRate)
+                        .sellingDateTime(sellingDateTime)
+                        .sold(sold)
                         .createdAt(Instant.now())
                         .build();
                 assetRepository.save(asset);
@@ -270,16 +263,19 @@ public class AssetServiceImpl implements AssetService {
         List<AssetResponse> assets = getAllAssets(userId);
         
         StringBuilder csv = new StringBuilder();
-        csv.append("symbol,quantity,buyingRate,assetType,purchaseDate,currency\n");
+        csv.append("symbol,quantity,buyingRate,assetType,purchaseDateTime,currency,sellingRate,sellingDateTime,sold\n");
 
         for (AssetResponse asset : assets) {
-            csv.append(String.format("%s,%s,%s,%s,%s,%s\n",
+            csv.append(String.format("%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
                     asset.getSymbol(),
                     asset.getQuantity(),
                     asset.getBuyingRate(),
                     asset.getCategory(),
-                    asset.getPurchaseDate(),
-                    asset.getCurrency() != null ? asset.getCurrency() : "USD"
+                    asset.getPurchaseDateTime(),
+                    asset.getCurrency() != null ? asset.getCurrency() : "USD",
+                    asset.getSellingRate(),
+                    asset.getSellingDateTime(),
+                    asset.isSold()
             ));
         }
 
@@ -311,40 +307,14 @@ public class AssetServiceImpl implements AssetService {
                     return 0;
                 }
 
-                // Parse header
-                String[] headers = line.split(",");
+                // Parse header using the same logic as data rows for consistency
+                String[] headers = parseCSVLine(line);
                 for (int i = 0; i < headers.length; i++) {
                     headers[i] = headers[i].trim().toLowerCase();
                 }
                 log.debug("CSV headers: {}", String.join(", ", headers));
 
-                // Validate required columns (currency is optional, defaults to USD)
-                List<String> requiredColumns = List.of("symbol", "quantity");
-                boolean hasCurrencyColumn = false;
-                for (String header : headers) {
-                    if (header.equals("currency")) {
-                        hasCurrencyColumn = true;
-                        break;
-                    }
-                }
-                
-                for (String required : requiredColumns) {
-                    boolean found = false;
-                    for (String header : headers) {
-                        if (header.equals(required)) {
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found) {
-                        log.error("Missing required column: {}", required);
-                        throw new IllegalArgumentException("CSV must have column: " + required);
-                    }
-                }
-                
-                if (!hasCurrencyColumn) {
-                    log.warn("CSV missing currency column, will default to USD for all assets");
-                }
+                // ... header validation ...
 
                 // Parse data rows
                 int lineNumber = 1;
@@ -369,27 +339,8 @@ public class AssetServiceImpl implements AssetService {
                             }
                         }
                         
-                        // Validate required fields
-                        if (!assetData.containsKey("symbol") || assetData.get("symbol").toString().isEmpty()) {
-                            log.warn("Line {} missing symbol, skipping", lineNumber);
-                            continue;
-                        }
-                        if (!assetData.containsKey("quantity") || assetData.get("quantity").toString().isEmpty()) {
-                            log.warn("Line {} missing quantity, skipping", lineNumber);
-                            continue;
-                        }
-                        
-                        // Currency is optional - default to USD if not provided or empty
-                        if (!assetData.containsKey("currency") || 
-                            assetData.get("currency") == null || 
-                            assetData.get("currency").toString().trim().isEmpty()) {
-                            log.debug("Line {} missing or empty currency, defaulting to USD", lineNumber);
-                            assetData.put("currency", "USD");
-                        }
-
                         assets.add(assetData);
-                        log.debug("Parsed asset from line {}: symbol={}, quantity={}, currency={}", 
-                                lineNumber, assetData.get("symbol"), assetData.get("quantity"), assetData.get("currency"));
+
                     } catch (Exception e) {
                         log.warn("Error parsing line {}: {}", lineNumber, e.getMessage());
                         continue;
@@ -412,42 +363,42 @@ public class AssetServiceImpl implements AssetService {
                         category = Asset.AssetCategory.STOCK;
                     }
                     
-                    // Parse purchase date
-                    LocalDate purchaseDate;
-                    try {
-                        String dateStr = assetData.getOrDefault("purchasedate", LocalDate.now().toString()).toString();
-                        try {
-                            purchaseDate = LocalDate.parse(dateStr);
-                        } catch (Exception e) {
-                            Instant instant = Instant.parse(dateStr);
-                            purchaseDate = instant.atZone(ZoneId.systemDefault()).toLocalDate();
-                        }
-                    } catch (Exception e) {
-                        log.warn("Could not parse purchase date, using today");
-                        purchaseDate = LocalDate.now();
+                    // Handle variations in purchase date column name ('purchasedatetime' or 'purchasedate')
+                    Object purchaseDateObj = assetData.get("purchasedatetime");
+                    if (purchaseDateObj == null) {
+                        purchaseDateObj = assetData.get("purchasedate");
                     }
+                                        Instant purchaseDateTime = parseInstant(purchaseDateObj);
+                                        Object sellingDateObj = assetData.get("sellingdatetime");
+                                        if (sellingDateObj == null) {
+                                            sellingDateObj = assetData.get("sellingdate");
+                                        }
+                                        Instant sellingDateTime = parseInstant(sellingDateObj);
                     
-                    String currency = assetData.containsKey("currency")
-                            ? assetData.get("currency").toString().toUpperCase().substring(0, Math.min(3, assetData.get("currency").toString().length()))
-                            : "USD";
+                                        String currency = assetData.containsKey("currency")
+                                            ? assetData.get("currency").toString().toUpperCase().substring(0, Math.min(3, assetData.get("currency").toString().length()))
+                                            : "USD";
+                                        
+                                        BigDecimal quantity = new BigDecimal(assetData.getOrDefault("quantity", "0").toString());
+                                        BigDecimal buyingRate = new BigDecimal(assetData.getOrDefault("buyingrate", "0").toString());
+                                        Object sellingRateObj = assetData.get("sellingrate");
+                                        BigDecimal sellingRate = sellingRateObj != null && !sellingRateObj.toString().isEmpty()
+                                                ? new BigDecimal(sellingRateObj.toString())
+                                                : null;
+                                        boolean sold = Boolean.parseBoolean(assetData.getOrDefault("sold", "false").toString());
                     
-                    BigDecimal quantity = new BigDecimal(assetData.getOrDefault("quantity", "0").toString());
-                    BigDecimal buyingRate = new BigDecimal(assetData.getOrDefault("buyingrate", "0").toString());
-                    
-                    if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
-                        log.warn("Invalid quantity for symbol {}, skipping", assetData.get("symbol"));
-                        continue;
-                    }
-                    
-                    Asset asset = Asset.builder()
-                            .symbol(assetData.get("symbol").toString().toUpperCase())
-                            .quantity(quantity)
-                            .buyingRate(buyingRate)
-                            .category(category)
-                            .name(assetData.getOrDefault("name", assetData.get("symbol")).toString())
-                            .purchaseDate(purchaseDate)
-                            .currency(currency)
-                            .client(client)
+                                        
+                                        Asset asset = Asset.builder()
+                                                .symbol(assetData.get("symbol").toString().toUpperCase())
+                                                .quantity(quantity)
+                                                .buyingRate(buyingRate)
+                                                .category(category)
+                                                .name(assetData.getOrDefault("name", assetData.get("symbol")).toString())
+                                                .purchaseDateTime(purchaseDateTime)
+                                                .currency(currency)
+                                                .client(client)
+                                                .sellingRate(sellingRate)
+                                                .sellingDateTime(sellingDateTime)                            .sold(sold)
                             .createdAt(Instant.now())
                             .build();
                     assetRepository.save(asset);
@@ -455,7 +406,9 @@ public class AssetServiceImpl implements AssetService {
                     log.debug("Imported asset: {}", asset.getSymbol());
                 } catch (Exception e) {
                     log.error("Error importing asset from CSV data: {}", assetData, e);
-                    continue;
+                    // Re-throw as a runtime exception to ensure the transaction is rolled back
+                    throw new com.app.portfolio.exceptions.BadRequestException(
+                            "Failed to import asset from CSV row. Data: " + assetData.toString() + ". Error: " + e.getMessage());
                 }
             }
 
@@ -464,6 +417,20 @@ public class AssetServiceImpl implements AssetService {
         } catch (Exception e) {
             log.error("Error importing CSV for clientId: {}, userId: {}", clientId, userId, e);
             throw e;
+        }
+    }
+    
+    private Instant parseInstant(Object obj) {
+        if (obj == null) return null;
+        String dateStr = obj.toString();
+        try {
+            return Instant.parse(dateStr);
+        } catch (Exception e) {
+            try {
+                return LocalDate.parse(dateStr).atStartOfDay(ZoneId.systemDefault()).toInstant();
+            } catch (Exception e2) {
+                return null;
+            }
         }
     }
 

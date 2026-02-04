@@ -309,13 +309,21 @@ function setupClientManagement() {
 }
 
 async function deleteClient(clientId) {
-    console.log('Deleting client:', clientId); // Debugging
     if (!confirm('Are you sure you want to delete this client?')) return;
 
     try {
         await apiCall(`/clients/${clientId}`, 'DELETE');
+
+        // If the currently viewed client is the one being deleted, reset to main view
+        if (currentClientId === clientId) {
+            currentClientId = 'main';
+            document.getElementById('clientSwitcher').value = 'main';
+            refreshData();
+        }
+
+        // Refresh client lists in UI
         loadClientsForSwitcher();
-        loadClientsForSettings(); // Refresh client list in settings
+        loadClientsForSettings();
     } catch (error) {
         alert('Error deleting client: ' + error.message);
     }
@@ -432,7 +440,7 @@ async function loadClientsForSwitcher() {
     try {
         const clients = await apiCall('/clients');
         const clientSwitcher = document.getElementById('clientSwitcher');
-        clientSwitcher.innerHTML = '<option value="main">Main Portfolio</option>';
+        clientSwitcher.innerHTML = '<option value="main">Combined Portfolio</option>';
         clients.forEach(client => {
             const option = document.createElement('option');
             option.value = client.id;
@@ -446,111 +454,101 @@ async function loadClientsForSwitcher() {
 
 async function editAsset(assetId) {
     console.log('[DEBUG] editAsset called with assetId:', assetId);
-    console.log('[DEBUG] isModalOpen before:', isModalOpen);
-    
-    isModalOpen = true; // Prevent refresh while modal is open
-    console.log('[DEBUG] isModalOpen after setting:', isModalOpen);
+    isModalOpen = true;
     
     try {
-        const url = currentClientId === 'main' ? `/assets/${assetId}` : `/clients/${currentClientId}/assets/${assetId}`;
+        const url = `/assets/${assetId}`; // Simplified URL, assuming API gateway handles client scope
         console.log('[DEBUG] Fetching asset from URL:', url);
         const asset = await apiCall(url);
         console.log('[DEBUG] Asset fetched:', asset);
         
         const modal = document.getElementById('editAssetModal');
-        console.log('[DEBUG] Modal element found:', !!modal);
         if (!modal) {
             console.error('[ERROR] editAssetModal not found in DOM');
             isModalOpen = false;
             return;
         }
-        
-        console.log('[DEBUG] Modal classes before:', modal.className);
-        
-        // Remove hidden class AND force display with inline style to override !important
+
         modal.classList.remove('hidden');
-        modal.style.setProperty('display', 'block', 'important');
-        modal.style.setProperty('visibility', 'visible', 'important');
-        modal.style.setProperty('opacity', '1', 'important');
-        modal.style.setProperty('z-index', '10000', 'important');
-        
-        console.log('[DEBUG] Modal classes after removing hidden:', modal.className);
-        
-        // Force display and check visibility
-        const computedStyle = window.getComputedStyle(modal);
-        console.log('[DEBUG] Modal computed display:', computedStyle.display);
-        console.log('[DEBUG] Modal computed visibility:', computedStyle.visibility);
-        console.log('[DEBUG] Modal computed z-index:', computedStyle.zIndex);
-        console.log('[DEBUG] Modal computed opacity:', computedStyle.opacity);
-        console.log('[DEBUG] Modal offsetParent:', modal.offsetParent);
-        console.log('[DEBUG] Modal offsetWidth:', modal.offsetWidth);
-        console.log('[DEBUG] Modal offsetHeight:', modal.offsetHeight);
-        
+
+        // Populate form fields
         document.getElementById('editAssetId').value = asset.id;
         document.getElementById('editAssetName').value = asset.name || '';
         document.getElementById('editAssetCategory').value = asset.category || 'STOCK';
         document.getElementById('editAssetSymbol').value = asset.symbol || '';
         document.getElementById('editAssetQuantity').value = asset.quantity || '';
         document.getElementById('editAssetBuyingRate').value = asset.buyingRate || '';
-        document.getElementById('editAssetPurchaseDate').value = asset.purchaseDate || '';
         document.getElementById('editAssetCurrency').value = asset.currency || 'USD';
-
-        const form = document.getElementById('editAssetForm');
-        console.log('[DEBUG] Form element found:', !!form);
-        if (!form) {
-            console.error('[ERROR] editAssetForm not found in DOM');
-            isModalOpen = false;
-            modal.classList.add('hidden');
-            return;
+        
+        // Handle purchase date-time
+        if (asset.purchaseDateTime) {
+            // Convert ISO string (e.g., 2023-10-27T10:00:00Z) to format for datetime-local (YYYY-MM-DDTHH:MM)
+            document.getElementById('editAssetPurchaseDateTime').value = asset.purchaseDateTime.slice(0, 16);
         }
+
+        // Handle selling info
+        const soldCheckbox = document.getElementById('editAssetSold');
+        const sellingInfo = document.getElementById('selling-info');
+        const sellingRateInput = document.getElementById('editAssetSellingRate');
+        const sellingDateTimeInput = document.getElementById('editAssetSellingDateTime');
+
+        soldCheckbox.checked = asset.sold;
+        sellingRateInput.value = asset.sellingRate || '';
+        if (asset.sellingDateTime) {
+            sellingDateTimeInput.value = asset.sellingDateTime.slice(0, 16);
+        } else {
+            sellingDateTimeInput.value = '';
+        }
+
+        // Toggle visibility based on initial 'sold' status
+        if (asset.sold) {
+            sellingInfo.classList.remove('hidden');
+        } else {
+            sellingInfo.classList.add('hidden');
+        }
+
+        // Add event listener for the checkbox
+        soldCheckbox.onchange = () => {
+            sellingInfo.classList.toggle('hidden', !soldCheckbox.checked);
+        };
+
+        // Handle form submission
+        const form = document.getElementById('editAssetForm');
         form.onsubmit = async (e) => {
             e.preventDefault();
+            
+            const purchaseDateTimeValue = document.getElementById('editAssetPurchaseDateTime').value;
+            const sellingDateTimeValue = document.getElementById('editAssetSellingDateTime').value;
+
             const assetData = {
                 name: document.getElementById('editAssetName').value,
                 category: document.getElementById('editAssetCategory').value,
                 symbol: document.getElementById('editAssetSymbol').value,
                 quantity: parseFloat(document.getElementById('editAssetQuantity').value),
                 buyingRate: parseFloat(document.getElementById('editAssetBuyingRate').value),
-                purchaseDate: document.getElementById('editAssetPurchaseDate').value,
+                purchaseDateTime: purchaseDateTimeValue ? `${purchaseDateTimeValue}:00Z` : null,
                 currency: document.getElementById('editAssetCurrency').value,
+                sold: document.getElementById('editAssetSold').checked,
+                sellingRate: parseFloat(document.getElementById('editAssetSellingRate').value) || null,
+                sellingDateTime: sellingDateTimeValue ? `${sellingDateTimeValue}:00Z` : null,
             };
 
             try {
-                const updateUrl = currentClientId === 'main' ? `/assets/${assetId}` : `/clients/${currentClientId}/assets/${assetId}`;
+                const updateUrl = `/assets/${assetId}`;
                 await apiCall(updateUrl, 'PUT', assetData);
                 modal.classList.add('hidden');
-                modal.style.removeProperty('display');
-                modal.style.removeProperty('visibility');
-                modal.style.removeProperty('opacity');
-                modal.style.removeProperty('z-index');
                 isModalOpen = false;
                 form.reset();
-                form.onsubmit = null; // Reset submit handler
-                refreshData(); // Refresh the current tab
+                form.onsubmit = null;
+                refreshData(); 
             } catch (error) {
                 console.error('[ERROR] Backend error updating asset:', error);
                 alert('Error updating asset: ' + error.message);
             }
         };
 
-        const closeModalBtn = document.getElementById('closeEditAssetModal');
-        if (closeModalBtn) {
-            closeModalBtn.onclick = () => {
-                console.log('[DEBUG] Close modal button clicked');
-                modal.classList.add('hidden');
-                modal.style.removeProperty('display');
-                modal.style.removeProperty('visibility');
-                modal.style.removeProperty('opacity');
-                modal.style.removeProperty('z-index');
-                isModalOpen = false;
-                form.reset();
-                form.onsubmit = null;
-            };
-        }
-
     } catch (error) {
-        console.error('[ERROR] Error fetching asset data:', error);
-        console.error('[ERROR] Error stack:', error.stack);
+        console.error('[ERROR] Error fetching asset data for edit:', error);
         alert('Error fetching asset data: ' + error.message);
         isModalOpen = false;
     }

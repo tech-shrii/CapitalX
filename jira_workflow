@@ -1,0 +1,314 @@
+STORY 1: Understand customer problem and portfolio requirements
+
+Tasks
+
+Review customer Excel-based workflow
+
+Identify supported asset classes (stocks, crypto, FD, pension, commodities)
+
+Document portfolio manager pain points
+
+Finalize problem statement
+
+STORY 2: Define system architecture and backend structure
+
+Tasks
+
+Design high-level system architecture
+
+Decide service separation (Spring Boot, Python pricing)
+
+Finalize backend folder structure
+
+Review employee project for reference structure
+
+STORY 3: Initialize Spring Boot backend project
+
+Tasks
+
+Create Spring Boot project using Spring Initializr
+
+Configure Maven dependencies
+
+Setup application properties
+
+Verify application runs locally
+
+STORY 4: Design database schema for portfolio management
+
+Tasks
+
+Identify required entities
+
+Design ER diagram
+
+Define table relationships
+
+Finalize schema
+
+STORY 5: Implement core backend layers
+
+Tasks
+
+Create entity classes
+
+Create repository interfaces
+
+Create DTOs
+
+Create mappers
+
+Create service interfaces
+
+Create controller classes
+
+STORY 6: Implement basic CRUD APIs
+
+Tasks
+
+Create customer CRUD APIs
+
+Create portfolio CRUD APIs
+
+Test APIs using Postman
+
+Fix validation issues
+
+STORY 7: Push backend base implementation to main
+
+Tasks
+
+Review code structure
+
+Clean unused code
+
+Commit and push to main branch
+
+🟦 SPRINT 2 – Stories & Tasks
+STORY 8: Add Excel file ingestion capability
+
+Tasks
+
+Add Apache POI dependency
+
+Define Excel file format
+
+Implement Excel parsing utility
+
+Validate Excel data
+
+STORY 9: Persist Excel portfolio data to database
+
+Tasks
+
+Map Excel rows to DTOs
+
+Save assets and transactions
+
+Handle duplicate entries
+
+Handle invalid rows
+
+STORY 10: Create APIs for Excel upload
+
+Tasks
+
+Create Excel upload controller
+
+Implement service logic
+
+Add exception handling
+
+Test upload scenarios
+
+STORY 11: Finalize API mappings and service interfaces
+
+Tasks
+
+Define REST endpoint structure
+
+Refactor service interfaces
+
+Standardize API responses
+
+Add request/response validation
+
+STORY 12: Implement unit testing for backend
+
+Tasks
+
+Setup JUnit and Mockito
+
+Write service layer tests
+
+Write controller tests
+
+Add negative test cases
+
+STORY 13: Merge Excel and backend changes to main
+
+Tasks
+
+Resolve conflicts
+
+Verify build stability
+
+Merge to main branch
+
+🟦 SPRINT 3 – Stories & Tasks
+STORY 14: Implement email-based OTP authentication
+
+Tasks
+
+Create user entity (portfolio manager)
+
+Create OTP entity and table
+
+Generate random OTP
+
+Save OTP with expiry
+
+STORY 15: Integrate email service for OTP delivery
+
+Tasks
+
+Configure SMTP server
+
+Implement email sending utility
+
+Trigger OTP email
+
+Handle email failures
+
+STORY 16: Verify OTP and create user account
+
+Tasks
+
+Create OTP verification API
+
+Validate OTP and expiry
+
+Create user after verification
+
+Handle invalid OTP cases
+
+STORY 17: Secure backend APIs using Spring Security
+
+Tasks
+
+Add Spring Security dependency
+
+Configure authentication filter
+
+Restrict access to secured APIs
+
+Allow only verified users
+
+STORY 18: Create frontend authentication pages
+
+Tasks
+
+Create signup page
+
+Create login page
+
+Create OTP verification page
+
+Integrate with backend APIs
+
+STORY 19: Create frontend dashboard and portfolio pages
+
+Tasks
+
+Create dashboard layout
+
+Create client details page
+
+Create portfolio summary page
+
+Create Excel import UI
+
+Create profit/loss statement page
+
+STORY 20: Push frontend and security changes to main
+
+Tasks
+
+Test end-to-end flow
+
+Fix UI and API issues
+
+Push to main branch
+
+🟦 SPRINT 4 – Stories & Tasks
+STORY 21: Develop Python pricing microservice
+
+Tasks
+
+Setup Python project
+
+Integrate Yahoo Finance API
+
+Implement price fetch logic
+
+Store pricing data in database
+
+STORY 22: Expose pricing APIs for frontend and backend
+
+Tasks
+
+Create REST APIs for pricing
+
+Add error handling
+
+Test pricing APIs
+
+Push pricing service to main
+
+STORY 23: Integrate pricing service into frontend
+
+Tasks
+
+Create pricing UI page
+
+Fetch live prices from Python service
+
+Display asset-wise pricing
+
+Integrate with portfolio view
+
+STORY 24: Integrate investment news API
+
+Tasks
+
+Integrate newsapi.org in Spring Boot
+
+Create news service
+
+Create news controller
+
+Test news fetch functionality
+
+STORY 25: Create frontend news page
+
+Tasks
+
+Create news UI page
+
+Display categorized investment news
+
+Integrate backend news APIs
+
+Push changes to main
+
+STORY 26: Prepare chatbot foundation (future scope)
+
+Tasks
+
+Define predefined questions
+
+Design chatbot flow
+
+Create placeholder APIs
+
+Document future LLM integration

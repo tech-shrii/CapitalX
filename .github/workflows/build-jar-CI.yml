@@ -19,6 +19,7 @@ jobs:
           java-version: 17
           cache: maven
       - name: Build Jar(Skip Tests)
+        working-directory: backend
         run: mvn clean package -DskipTests=true -B
 
       - name: Upload Jar to Artifact

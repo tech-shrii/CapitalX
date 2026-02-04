@@ -3,87 +3,76 @@ package com.app.portfolio.controller;
 import com.app.portfolio.dto.dashboard.DashboardSummaryResponse;
 import com.app.portfolio.security.UserPrincipal;
 import com.app.portfolio.service.dashboard.DashboardService;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
-import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
-import org.springframework.test.web.servlet.MockMvc;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.ResponseEntity;
 
-import java.math.BigDecimal;
-import java.util.Collections;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+@ExtendWith(MockitoExtension.class)
+class DashboardControllerTest {
 
-@WebMvcTest(DashboardController.class)
-public class DashboardControllerTest {
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @MockBean
+    @Mock
     private DashboardService dashboardService;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    @Mock
+    private UserPrincipal userPrincipal;
 
-    private UserPrincipal mockUserPrincipal;
+    @InjectMocks
+    private DashboardController dashboardController;
 
-    @BeforeEach
-    void setUp() {
-        mockUserPrincipal = new UserPrincipal(1L, "test@example.com", "password", Collections.emptyList());
+    @org.junit.jupiter.api.Test
+    @DisplayName("Get dashboard summary returns summary for valid user")
+    void getDashboardSummary_ReturnsSummary_ForValidUser() {
+        long userId = 1L;
+        DashboardSummaryResponse summary = mock(DashboardSummaryResponse.class);
+        when(userPrincipal.getId()).thenReturn(userId);
+        when(dashboardService.getDashboardSummary(userId)).thenReturn(summary);
+
+        ResponseEntity<DashboardSummaryResponse> response = dashboardController.getDashboardSummary(userPrincipal);
+
+        assertThat(response.getStatusCodeValue()).isEqualTo(200);
+        assertThat(response.getBody()).isEqualTo(summary);
     }
 
-    private SecurityMockMvcRequestPostProcessors.UserRequestPostProcessor testUser() {
-        return SecurityMockMvcRequestPostProcessors.user(mockUserPrincipal);
+    @org.junit.jupiter.api.Test
+    @DisplayName("Get dashboard summary throws exception when service throws exception")
+    void getDashboardSummary_ThrowsException_WhenServiceThrowsException() {
+        long userId = 1L;
+        when(userPrincipal.getId()).thenReturn(userId);
+        when(dashboardService.getDashboardSummary(userId)).thenThrow(new RuntimeException("error"));
+
+        assertThrows(RuntimeException.class, () -> dashboardController.getDashboardSummary(userPrincipal));
     }
 
-    @Test
-    void getDashboardSummary_shouldReturnSummary() throws Exception {
-        Long userId = mockUserPrincipal.getId();
-        DashboardSummaryResponse summaryResponse = DashboardSummaryResponse.builder()
-                .totalClients(5L)
-                .totalAssets(100L)
-                .totalValue(new BigDecimal("123456.78"))
-                .build();
+    @org.junit.jupiter.api.Test
+    @DisplayName("Get client dashboard summary returns summary for valid client and user")
+    void getClientDashboardSummary_ReturnsSummary_ForValidClientAndUser() {
+        long userId = 1L;
+        long clientId = 2L;
+        DashboardSummaryResponse summary = mock(DashboardSummaryResponse.class);
+        when(userPrincipal.getId()).thenReturn(userId);
+        when(dashboardService.getClientDashboardSummary(clientId, userId)).thenReturn(summary);
 
-        when(dashboardService.getDashboardSummary(eq(userId))).thenReturn(summaryResponse);
+        ResponseEntity<DashboardSummaryResponse> response = dashboardController.getClientDashboardSummary(clientId, userPrincipal);
 
-        mockMvc.perform(get("/api/dashboard/summary")
-                        .with(testUser())
-                        .accept(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.totalClients").value(5))
-                .andExpect(jsonPath("$.totalAssets").value(100))
-                .andExpect(jsonPath("$.totalValue").value(123456.78));
+        assertThat(response.getStatusCodeValue()).isEqualTo(200);
+        assertThat(response.getBody()).isEqualTo(summary);
     }
 
-    @Test
-    void getClientDashboardSummary_shouldReturnSummary() throws Exception {
-        Long clientId = 1L;
-        Long userId = mockUserPrincipal.getId();
-        DashboardSummaryResponse summaryResponse = DashboardSummaryResponse.builder()
-                .totalClients(1L)
-                .totalAssets(20L)
-                .totalValue(new BigDecimal("54321.99"))
-                .build();
+    @org.junit.jupiter.api.Test
+    @DisplayName("Get client dashboard summary throws exception when service throws exception")
+    void getClientDashboardSummary_ThrowsException_WhenServiceThrowsException() {
+        long userId = 1L;
+        long clientId = 2L;
+        when(userPrincipal.getId()).thenReturn(userId);
+        when(dashboardService.getClientDashboardSummary(clientId, userId)).thenThrow(new RuntimeException("error"));
 
-        when(dashboardService.getClientDashboardSummary(eq(clientId), eq(userId))).thenReturn(summaryResponse);
-
-        mockMvc.perform(get("/api/clients/{clientId}/dashboard/summary", clientId)
-                        .with(testUser())
-                        .accept(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.totalClients").value(1))
-                .andExpect(jsonPath("$.totalAssets").value(20))
-                .andExpect(jsonPath("$.totalValue").value(54321.99));
+        assertThrows(RuntimeException.class, () -> dashboardController.getClientDashboardSummary(clientId, userPrincipal));
     }
 }

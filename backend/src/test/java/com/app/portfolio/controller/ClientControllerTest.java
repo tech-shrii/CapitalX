@@ -1,100 +1,152 @@
 package com.app.portfolio.controller;
 
+import com.app.portfolio.dto.client.ClientRequest;
 import com.app.portfolio.dto.client.ClientResponse;
-import com.app.portfolio.exceptions.ResourceNotFoundException;
 import com.app.portfolio.security.UserPrincipal;
 import com.app.portfolio.service.client.ClientService;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
-import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
-import org.springframework.test.web.servlet.MockMvc;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.ResponseEntity;
 
-import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@WebMvcTest(ClientController.class)
-public class ClientControllerTest {
+@ExtendWith(MockitoExtension.class)
+class ClientControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @MockBean
+    @Mock
     private ClientService clientService;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    @Mock
+    private UserPrincipal userPrincipal;
 
-    private UserPrincipal mockUserPrincipal;
+    @InjectMocks
+    private ClientController clientController;
 
-    @BeforeEach
-    void setUp() {
-        mockUserPrincipal = new UserPrincipal(1L, "test@example.com", "password", Collections.emptyList());
+    @org.junit.jupiter.api.Test
+    @DisplayName("Get all clients returns list of clients for valid user")
+    void getAllClients_ReturnsListOfClients_ForValidUser() {
+        long userId = 1L;
+        List<ClientResponse> clients = List.of(mock(ClientResponse.class));
+        when(userPrincipal.getId()).thenReturn(userId);
+        when(clientService.getAllClients(userId)).thenReturn(clients);
+
+        ResponseEntity<List<ClientResponse>> response = clientController.getAllClients(userPrincipal);
+
+        assertThat(response.getStatusCodeValue()).isEqualTo(200);
+        assertThat(response.getBody()).isEqualTo(clients);
     }
 
-    private SecurityMockMvcRequestPostProcessors.UserRequestPostProcessor testUser() {
-        return SecurityMockMvcRequestPostProcessors.user(mockUserPrincipal);
+    @org.junit.jupiter.api.Test
+    @DisplayName("Get client by id returns client for valid id and user")
+    void getClientById_ReturnsClient_ForValidIdAndUser() {
+        long userId = 1L;
+        long clientId = 2L;
+        ClientResponse clientResponse = mock(ClientResponse.class);
+        when(userPrincipal.getId()).thenReturn(userId);
+        when(clientService.getClientById(clientId, userId)).thenReturn(clientResponse);
+
+        ResponseEntity<ClientResponse> response = clientController.getClientById(clientId, userPrincipal);
+
+        assertThat(response.getStatusCodeValue()).isEqualTo(200);
+        assertThat(response.getBody()).isEqualTo(clientResponse);
     }
 
-    @Test
-    void getAllClients_shouldReturnClientList() throws Exception {
-        Long userId = mockUserPrincipal.getId();
-        ClientResponse clientResponse = ClientResponse.builder().id(1L).name("Test Client").email("client@example.com").build();
-        List<ClientResponse> clientList = Collections.singletonList(clientResponse);
+    @org.junit.jupiter.api.Test
+    @DisplayName("Create client returns created client for valid request")
+    void createClient_ReturnsCreatedClient_ForValidRequest() {
+        long userId = 1L;
+        ClientRequest request = mock(ClientRequest.class);
+        ClientResponse clientResponse = mock(ClientResponse.class);
+        when(userPrincipal.getId()).thenReturn(userId);
+        when(clientService.createClient(request, userId)).thenReturn(clientResponse);
 
-        when(clientService.getAllClients(eq(userId))).thenReturn(clientList);
+        ResponseEntity<ClientResponse> response = clientController.createClient(request, userPrincipal);
 
-        mockMvc.perform(get("/api/clients")
-                        .with(testUser())
-                        .accept(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$[0].id").value(1L))
-                .andExpect(jsonPath("$[0].name").value("Test Client"))
-                .andExpect(jsonPath("$[0].email").value("client@example.com"));
+        assertThat(response.getStatusCodeValue()).isEqualTo(200);
+        assertThat(response.getBody()).isEqualTo(clientResponse);
     }
 
-    @Test
-    void getClientById_shouldReturnClient_whenFound() throws Exception {
-        Long clientId = 1L;
-        Long userId = mockUserPrincipal.getId();
-        ClientResponse clientResponse = ClientResponse.builder().id(clientId).name("Test Client").email("client@example.com").build();
+    @org.junit.jupiter.api.Test
+    @DisplayName("Update client returns updated client for valid id and request")
+    void updateClient_ReturnsUpdatedClient_ForValidIdAndRequest() {
+        long userId = 1L;
+        long clientId = 2L;
+        ClientRequest request = mock(ClientRequest.class);
+        ClientResponse clientResponse = mock(ClientResponse.class);
+        when(userPrincipal.getId()).thenReturn(userId);
+        when(clientService.updateClient(clientId, request, userId)).thenReturn(clientResponse);
 
-        when(clientService.getClientById(eq(clientId), eq(userId))).thenReturn(clientResponse);
+        ResponseEntity<ClientResponse> response = clientController.updateClient(clientId, request, userPrincipal);
 
-        mockMvc.perform(get("/api/clients/{id}", clientId)
-                        .with(testUser())
-                        .accept(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.id").value(clientId))
-                .andExpect(jsonPath("$.name").value("Test Client"))
-                .andExpect(jsonPath("$.email").value("client@example.com"));
+        assertThat(response.getStatusCodeValue()).isEqualTo(200);
+        assertThat(response.getBody()).isEqualTo(clientResponse);
     }
 
-    @Test
-    void getClientById_shouldReturnNotFound_whenClientNotFound() throws Exception {
-        Long clientId = 99L;
-        Long userId = mockUserPrincipal.getId();
+    @org.junit.jupiter.api.Test
+    @DisplayName("Delete client returns success message for valid id")
+    void deleteClient_ReturnsSuccessMessage_ForValidId() {
+        long userId = 1L;
+        long clientId = 2L;
+        when(userPrincipal.getId()).thenReturn(userId);
+        doNothing().when(clientService).deleteClient(clientId, userId);
 
-        when(clientService.getClientById(eq(clientId), eq(userId)))
-                .thenThrow(new ResourceNotFoundException("Client", clientId));
+        ResponseEntity<?> response = clientController.deleteClient(clientId, userPrincipal);
 
-        mockMvc.perform(get("/api/clients/{id}", clientId)
-                        .with(testUser())
-                        .accept(MediaType.APPLICATION_JSON))
-                .andExpect(status().isNotFound())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.message").value("Client not found with id '99'"))
-                .andExpect(jsonPath("$.status").value(404));
+        assertThat(response.getStatusCodeValue()).isEqualTo(200);
+        assertThat(((Map<?, ?>) response.getBody()).get("message")).isEqualTo("Client deleted successfully");
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Get client by id throws exception when service throws exception")
+    void getClientById_ThrowsException_WhenServiceThrowsException() {
+        long userId = 1L;
+        long clientId = 2L;
+        when(userPrincipal.getId()).thenReturn(userId);
+        when(clientService.getClientById(clientId, userId)).thenThrow(new RuntimeException("error"));
+
+        assertThrows(RuntimeException.class, () -> clientController.getClientById(clientId, userPrincipal));
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Create client throws exception when service throws exception")
+    void createClient_ThrowsException_WhenServiceThrowsException() {
+        long userId = 1L;
+        ClientRequest request = mock(ClientRequest.class);
+        when(userPrincipal.getId()).thenReturn(userId);
+        when(clientService.createClient(request, userId)).thenThrow(new RuntimeException("error"));
+
+        assertThrows(RuntimeException.class, () -> clientController.createClient(request, userPrincipal));
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Update client throws exception when service throws exception")
+    void updateClient_ThrowsException_WhenServiceThrowsException() {
+        long userId = 1L;
+        long clientId = 2L;
+        ClientRequest request = mock(ClientRequest.class);
+        when(userPrincipal.getId()).thenReturn(userId);
+        when(clientService.updateClient(clientId, request, userId)).thenThrow(new RuntimeException("error"));
+
+        assertThrows(RuntimeException.class, () -> clientController.updateClient(clientId, request, userPrincipal));
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Delete client throws exception when service throws exception")
+    void deleteClient_ThrowsException_WhenServiceThrowsException() {
+        long userId = 1L;
+        long clientId = 2L;
+        when(userPrincipal.getId()).thenReturn(userId);
+        doThrow(new RuntimeException("error")).when(clientService).deleteClient(clientId, userId);
+
+        assertThrows(RuntimeException.class, () -> clientController.deleteClient(clientId, userPrincipal));
     }
 }

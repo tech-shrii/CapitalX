@@ -247,6 +247,9 @@ async function loadDashboardData() {
             }
         }
 
+        // Load News for Dashboard Widget
+        loadDashboardNews();
+
     } catch (error) {
         console.error('[ERROR] Error loading dashboard data:', error);
     }
@@ -312,6 +315,30 @@ function updateLineChart(portfolioPerformance) {
     }
 }
 
+async function loadDashboardNews() {
+    const newsContainer = document.getElementById('dashboard-news-list');
+    if (!newsContainer) return;
+
+    try {
+        const news = await apiCall('/news');
+        // Limit to 5 items for the widget
+        const recentNews = news.slice(0, 5);
+        
+        if (recentNews.length === 0) {
+            newsContainer.innerHTML = '<p>No news available.</p>';
+            return;
+        }
+
+        newsContainer.innerHTML = recentNews.map(item => `
+            <div class="news-headline-item">
+                <a href="${item.url}" target="_blank" class="news-link">${item.title}</a>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading dashboard news:', error);
+        newsContainer.innerHTML = '<p>Failed to load news.</p>';
+    }
+}
 
 
 function setupClientManagement() {

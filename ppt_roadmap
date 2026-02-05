@@ -1,491 +1,224 @@
 # Portfolio Management Platform
 
-### Slide‑Perfect Pitch Deck Content
+### 15-Minute Pitch + Demo Deck (Condensed)
 
 ---
 
-## Slide 1 – Title Slide
+## Slide 1 – Title & One-Liner (30 sec)
 
 **Portfolio Management Platform**
-*A Centralized, Intelligent System for Modern Portfolio Managers*
+*Replacing Excel-based portfolio chaos with a centralized, intelligent system*
 
-**Subtitle:** Secure • Automated • Scalable • Insight‑Driven
-**Audience:** Portfolio Managers | Technical Reviewers | Management | Investors
-
----
-
-## Slide 2 – Context & Industry Background
-
-### Why Portfolio Management Needs Reinvention
-
-Portfolio managers today handle:
-
-* Multiple clients
-* Multiple asset classes
-* Constantly changing market data
-
-Yet, most portfolio operations still rely on **manual, Excel‑driven workflows** that were never designed for scale, automation, or real‑time decision making.
+Audience: Portfolio Managers | Reviewers | Stakeholders
 
 ---
 
-## Slide 3 – Problem Statement (Core Section)
+## Slide 2 – Problem Statement (2 min)
 
-### Current Problems Faced by Portfolio Managers
+### What’s Broken Today
 
 Portfolio managers today:
 
-* Maintain **dozens of Excel files**, one per client
-* Track assets **separately** across:
+* Maintain **multiple Excel files per client**
+* Track **stocks, crypto, bonds, FDs, commodities separately**
+* Manually calculate:
+
+  * Portfolio value
+  * Profit / loss
+  * Asset allocation
+
+Challenges:
+
+* No centralized portfolio view
+* Manual price updates
+* Manual email reporting
+* No real-time or historical insights
+
+**Result:** Time-consuming, error-prone, and impossible to scale
+
+---
+
+## Slide 3 – Core Pain Points (1 min)
+
+### Why Excel Fails at Scale
+
+* Heavy manual effort
+* High risk of calculation errors
+* No live market data
+* Poor portfolio visibility
+* No automation
+* Breaks down as client count grows
+
+---
+
+## Slide 4 – Solution Overview (1.5 min)
+
+### Our Product
+
+A **centralized, secure, automated Portfolio Management Platform** that replaces scattered Excel workflows.
+
+**What it does:**
+
+* One system for all clients & assets
+* Live portfolio valuation
+* Automated analytics & reporting
+
+---
+
+## Slide 5 – Key Capabilities (1 min)
+
+### What the Platform Delivers
+
+* Email-based OTP authentication
+* Centralized user & portfolio management
+* Excel / CSV bulk asset upload
+* Live asset price fetching
+* Portfolio analytics & charts
+* Automated email statements
+* Investment news integration
+* 6-month historical tracking
+
+---
+
+## Slide 6 – User Flow & Security (1 min)
+
+### Secure Access Model
+
+Flow:
+Signup → Email OTP → Verify → Login → Dashboard
+
+Security highlights:
+
+* No login without registration
+* Time-bound OTP via SMTP
+* Only verified users access portfolios
+
+---
+
+## Slide 7 – Excel Ingestion (Demo Slide) (1.5 min)
+
+### How We Kill Excel Chaos
+
+* Users upload Excel / CSV files
+* Backend parses & validates data
+* Assets mapped into structured models:
 
   * Stocks
   * Crypto
   * Bonds
-  * Fixed Deposits
-  * Pensions
   * Commodities
 
-There is **no single system** that unifies all client portfolios.
+**Value:**
+
+* Bulk upload instead of manual entry
+* Clean, searchable, centralized data
 
 ---
 
-## Slide 4 – Manual & Error‑Prone Operations
+## Slide 8 – Dashboard & Analytics (Demo Slide) (2 min)
 
-### Daily Operational Challenges
+### What Managers See
 
-Portfolio managers must manually:
-
-* Calculate total portfolio value
-* Compute profit and loss
-* Track asset allocation percentages
-
-This requires:
-
-* Opening multiple Excel sheets
-* Manually entering or updating prices
-* Cross‑checking calculations repeatedly
-
-This process is **time‑consuming, repetitive, and error‑prone**.
-
----
-
-## Slide 5 – Visibility & Reporting Gaps
-
-### Lack of Insights & Real‑Time View
-
-Current limitations:
-
-* No centralized dashboard
-* No live market price integration
-* No historical portfolio tracking
-* No automated insights
-
-Reporting challenges:
-
-* Reports are manually created
-* Statements are sent via email manually
-* High dependency on human effort
-
----
-
-## Slide 6 – Core Pain Points Summary
-
-### Why Excel‑Based Portfolio Management Fails
-
-**Key Pain Points:**
-
-* Time‑consuming Excel workflows
-* High risk of manual calculation errors
-* Poor visibility into portfolio performance
-* No real‑time data or analytics
-* No automation in reporting
-* Difficult to scale with growing clients
-
----
-
-## Slide 7 – Solution Overview
-
-### Introducing the Portfolio Management Platform
-
-A **centralized, secure, automated Portfolio Management Platform** designed to replace scattered Excel files with a **single intelligent system**.
-
-The platform acts as:
-
-* A single source of truth
-* An automation engine
-* An analytics & insight layer
-
----
-
-## Slide 8 – What the Platform Delivers
-
-### High‑Level Capabilities
-
-The platform provides:
-
-* Secure OTP‑based authentication
-* Centralized user & portfolio management
-* Excel/CSV‑based bulk asset ingestion
-* Live asset price fetching
-* Portfolio analytics & visualization
-* Automated portfolio statements
-* Investment news integration
-* Historical portfolio tracking (up to 6 months)
-
----
-
-## Slide 9 – Authentication & User Access Control
-
-### Secure by Design
-
-**Key Principles:**
-
-* No anonymous access
-* No shared credentials
-* Email‑verified users only
-
-All users must register and verify identity before accessing the system.
-
----
-
-## Slide 10 – Email‑Based OTP Authentication
-
-### Login & Registration Flow
-
-Authentication flow:
-
-1. User signs up with email
-2. System generates a random OTP
-3. OTP is:
-
-   * Time‑bound
-   * Single‑use
-   * Sent via SMTP email
-4. User verifies OTP
-5. Secure login granted
-
-This ensures **strong identity verification without password risks**.
-
----
-
-## Slide 11 – User Flow Diagram (Conceptual)
-
-### End‑to‑End Access Flow
-
-**Flow:**
-Signup → Email OTP → Verification → Login → Dashboard
-
-Only verified users can:
-
-* Access portfolios
-* Upload assets
-* View analytics
-
----
-
-## Slide 12 – Role of the Portfolio Manager
-
-### Client & Asset Control
-
-Portfolio Manager can:
-
-* Add and manage multiple clients
-* Request asset uploads from clients
-* View all client portfolios centrally
-* Monitor performance across users
-
----
-
-## Slide 13 – Excel / CSV Ingestion
-
-### Eliminating Excel Chaos
-
-Users upload Excel or CSV files containing asset data.
-
-Examples:
-
-* Stock holdings
-* Crypto investments
-* Bond allocations
-
-Bulk uploads replace repetitive manual entry.
-
----
-
-## Slide 14 – Technical Flow of Excel Processing
-
-### Backend Data Handling
-
-Process:
-
-1. File upload via UI
-2. Backend parses Excel/CSV
-3. Data validation rules applied
-4. Clean data persisted to database
-
-Invalid or malformed data is rejected safely.
-
----
-
-## Slide 15 – Asset Classification & Management
-
-### Unified Asset Model
-
-Assets are categorized as:
-
-* Stocks
-* Crypto
-* Bonds
-* Commodities
-
-Each asset supports:
-
-* Add
-* Edit
-* Update
-
-All assets are searchable, structured, and centrally stored.
-
----
-
-## Slide 16 – Value of Centralized Data
-
-### From Spreadsheets to Intelligence
-
-Centralization enables:
-
-* Single dashboard view
-* Consistent calculations
-* Zero duplication
-* Easy analytics & reporting
-
-Manual Excel effort is completely removed.
-
----
-
-## Slide 17 – Dashboard Overview
-
-### Real‑Time Portfolio Snapshot
-
-Dashboard displays:
+Dashboard shows:
 
 * Live total portfolio value
-* Asset‑wise allocation
+* Asset-wise allocation
 * Profit / loss summary
-* Real‑time price updates
 
-A single screen replaces dozens of Excel sheets.
-
----
-
-## Slide 18 – Portfolio Analytics
-
-### Visual & Actionable Insights
-
-Analytics include:
+Analytics:
 
 * Asset distribution charts
 * Portfolio performance trends
-* High‑level risk visibility
-
-Helps managers:
-
-* Understand exposure
-* Identify over‑concentration
-* Make informed decisions faster
+* High-level risk visibility
 
 ---
 
-## Slide 19 – Historical Portfolio Tracking
+## Slide 9 – Live Pricing & News (1.5 min)
 
-### Performance Over Time
+### Real-Time Intelligence
 
-Features:
+**Live Pricing:**
 
-* Portfolio value history (up to 6 months)
-* Trend visualization
-* User‑specific historical views
+* Python-based pricing microservice
+* Fetches real-time prices via market APIs
+* Keeps portfolio valuation always current
 
-Enables:
+**News Integration:**
 
-* Performance comparison
-* Trend analysis
-* Client transparency
-
----
-
-## Slide 20 – Live Pricing Microservice
-
-### Real‑Time Market Integration
-
-A dedicated **Python‑based pricing microservice**:
-
-* Fetches live prices from market APIs
-* Supports stocks & crypto pricing
-* Exposes REST endpoints
-
-Keeps portfolio valuations always up‑to‑date.
+* Real-time investment & market news
+* Helps managers make informed decisions
 
 ---
 
-## Slide 21 – Pricing Architecture Integration
+## Slide 10 – Automated Reporting (1 min)
 
-### Decoupled & Scalable Design
+### Zero Manual Effort
 
-Flow:
+* System auto-generates portfolio statements
+* Includes:
 
-* Pricing service fetches live data
-* Backend consumes pricing APIs
-* Frontend reflects updated valuations
+  * Portfolio value
+  * Asset breakdown
+  * Profit / loss
+* Statements emailed automatically to users
 
-Microservice isolation ensures:
-
-* Scalability
-* Fault tolerance
-* Independent upgrades
+**No Excel. No manual emails.**
 
 ---
 
-## Slide 22 – Investment News Integration
+## Slide 11 – System Architecture (1.5 min)
 
-### Market Awareness Built‑In
+### Built to Scale
 
-The platform integrates finance news APIs:
+**Frontend:** HTML, CSS, JavaScript
+**Backend:** Spring Boot (REST APIs, business logic, security)
+**Database:** Relational DB (users, portfolios, assets)
+**Microservice:** Python pricing service
+**Integrations:** SMTP, Market APIs, News APIs
 
-* Fetches real‑time investment news
-* Categorized market updates
-* Relevant financial insights
-
-Helps portfolio managers stay informed without switching platforms.
-
----
-
-## Slide 23 – Automated Portfolio Statements
-
-### Zero Manual Reporting
-
-System automatically generates statements containing:
-
-* Current portfolio value
-* Asset breakdown
-* Profit / loss summary
-
-Statements are:
-
-* Auto‑generated
-* Emailed via SMTP
-* Sent directly to registered users
+**Why it scales:** modular, API-driven, decoupled services
 
 ---
 
-## Slide 24 – System Architecture Overview
+## Slide 12 – Business & Technical Value (1 min)
 
-### Clean, Scalable Architecture
+### Why This Matters
 
-**Frontend:**
+**For Portfolio Managers:**
 
-* HTML, CSS, JavaScript
+* Single dashboard replaces Excel
+* Faster decisions
+* Better client communication
+* Easy scalability
 
-**Backend:**
+**Technically:**
 
-* Spring Boot
-* REST APIs
-* Security & business logic
-
-**Database:**
-
-* Relational database
-* Users, portfolios, assets, transactions
+* Secure authentication
+* Clean architecture
+* Microservice-based pricing
 
 ---
 
-## Slide 25 – Microservices & Integrations
+## Slide 13 – Future Scope: AI Chatbot (1 min)
 
-### External Connectivity
-
-**Microservices:**
-
-* Python pricing service
-
-**External Integrations:**
-
-* SMTP email service
-* Market price APIs
-* News APIs
-
-API‑driven architecture enables modular growth.
-
----
-
-## Slide 26 – Why This Architecture Scales
-
-### Built for Growth
-
-Scalability benefits:
-
-* Stateless backend APIs
-* Decoupled microservices
-* Centralized database design
-* Easy onboarding of new users
-
-Supports growing clients without operational overhead.
-
----
-
-## Slide 27 – Business Value for Portfolio Managers
-
-### Operational Excellence
-
-Benefits:
-
-* Single dashboard replaces Excel chaos
-* Faster, data‑driven decisions
-* Improved client communication
-* Reduced manual effort
-* Scalable portfolio management
-
----
-
-## Slide 28 – Technical Strengths
-
-### Engineering‑First Design
-
-Technical highlights:
-
-* Secure OTP authentication
-* Modular Spring Boot backend
-* Python microservices
-* Clean REST API design
-* Automation‑first workflows
-
----
-
-## Slide 29 – Future Scope: AI Chatbot
-
-### Intelligent Portfolio Assistance
-
-Planned enhancements:
+### Where This Goes Next
 
 * AI chatbot interface
-* Predefined queries:
+* Predefined questions:
 
   * “How is my portfolio performing?”
   * “Which asset has the highest return?”
-
-Future roadmap:
-
-* LLM integration
-* Predictive insights
-* Smart recommendations
+* Future LLM-driven insights & recommendations
 
 ---
 
-## Slide 30 – Final Slide: Why This Product Wins
+## Slide 14 – Final Slide (30 sec)
 
-### The Competitive Edge
+### Why This Product Wins
 
 * Replaces Excel chaos with intelligence
 * Automates portfolio tracking & reporting
-* Delivers real‑time insights
-* Secure, scalable, and future‑ready
+* Delivers real-time insights
+* Secure, scalable, and future-ready
 
-**A modern platform built for modern portfolio management.**
+**A modern platform for modern portfolio management.**

@@ -5,3 +5,4 @@ pricing-service/venv
 __pycache__/
 pricing-service/__pycache__/
 backend/target/*.class
+

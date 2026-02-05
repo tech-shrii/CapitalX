@@ -49,6 +49,12 @@ public class AssetController {
         return ResponseEntity.ok(assetService.createAsset(clientId, request, userPrincipal.getId()));
     }
 
+    @PostMapping("/assets")
+    public ResponseEntity<AssetResponse> createAsset(@Valid @RequestBody AssetRequest request,
+                                                     @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        return ResponseEntity.ok(assetService.createAsset(request, userPrincipal.getId()));
+    }
+
     @PostMapping("/assets/import")
     public ResponseEntity<Map<String, Object>> importAssets(@RequestBody List<Map<String, Object>> assets,
                                                             @AuthenticationPrincipal UserPrincipal userPrincipal) {

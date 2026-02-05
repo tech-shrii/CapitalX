@@ -42,7 +42,7 @@ Yahoo Finance API
 ```bash
 cd pricing-service
 pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+uvicorn main-new4:app --reload --port 8000
 ```
 
 ### 2. Spring Boot Backend

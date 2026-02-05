@@ -3,77 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CapitalX Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <title>CapitalX - Modern Portfolio Management</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/new-style.css">
 </head>
-<body>
+<body class="landing-body">
+
     <div class="container">
-        <header class="header">
-            <div class="title">Portfolio Manager</div>
-            <div class="nav-links">
-                <a href="auth/login.html" class="btn btn-outline">Login</a>
-                <a href="auth/signup.html" class="btn btn-primary">Sign Up</a>
+        <header class="landing-header">
+            <div class="landing-logo">CapitalX</div>
+            <div class="landing-nav-links">
+                <a href="auth/login.html" class="btn btn-secondary">Login</a>
+                <a href="auth/signup.html" class="btn btn-primary">Get Started</a>
             </div>
         </header>
 
         <main>
             <section class="hero">
                 <div class="hero-content">
-                    <h1 class="hero-title">Manage Your Client Portfolios with Ease</h1>
-                    <p class="hero-subtitle">Track investments, monitor P&L, and generate statements all in one place</p>
+                    <h1 class="hero-title">A Faster, Smarter Way to Manage Investments</h1>
+                    <p class="hero-subtitle">CapitalX provides a powerful, intuitive dashboard to track client portfolios, monitor real-time P&L, and stay ahead of the market.</p>
                     <div class="hero-actions">
-                        <a href="auth/signup.html" class="btn btn-primary btn-large">Get Started</a>
-                        <a href="auth/login.html" class="btn btn-outline btn-large">Login</a>
+                         <a href="auth/signup.html" class="btn btn-primary btn-large">Start Your Free Trial</a>
                     </div>
                 </div>
             </section>
 
-            <section class="features">
-                <h2 class="section-title">Features</h2>
+            <section id="features" class="features">
+                <div class="section-header">
+                    <h2 class="section-title">Everything you need. Nothing you don't.</h2>
+                    <p class="section-subtitle">Our features are designed to save you time and provide critical insights.</p>
+                </div>
                 <div class="features-grid">
                     <div class="feature-card">
-                        <div class="feature-icon">📊</div>
-                        <h3>Real-time P&L Tracking</h3>
-                        <p>Monitor profit and loss across all client portfolios with real-time updates</p>
+                        <div class="feature-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                        </div>
+                        <h3>Real-time P&L</h3>
+                        <p>Monitor profit and loss across all client portfolios with live market data.</p>
                     </div>
                     <div class="feature-card">
-                        <div class="feature-icon">👥</div>
+                        <div class="feature-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                        </div>
                         <h3>Client Management</h3>
-                        <p>Easily manage multiple clients and their investment portfolios</p>
+                        <p>Easily manage multiple clients and their individual investment portfolios.</p>
                     </div>
                     <div class="feature-card">
-                        <div class="feature-icon">📈</div>
-                        <h3>Asset Tracking</h3>
-                        <p>Track stocks, bonds, crypto, mutual funds, and more in one dashboard</p>
+                        <div class="feature-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-3 3"></path></svg>
+                        </div>
+                        <h3>Multi-Asset Tracking</h3>
+                        <p>Track stocks, bonds, crypto, mutual funds, and more in one unified dashboard.</p>
                     </div>
                     <div class="feature-card">
-                        <div class="feature-icon">📄</div>
+                        <div class="feature-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                        </div>
                         <h3>Statement Generation</h3>
-                        <p>Generate and email detailed portfolio statements to clients</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">📰</div>
-                        <h3>Financial News</h3>
-                        <p>Stay updated with relevant financial news based on your portfolio</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">📥</div>
-                        <h3>Excel Import/Export</h3>
-                        <p>Import existing data from Excel and export reports seamlessly</p>
+                        <p>Generate and email detailed portfolio statements and P&L reports to clients.</p>
                     </div>
                 </div>
             </section>
-
-            <section class="security">
-                <h2 class="section-title">Security First</h2>
-                <p class="security-text">Your data is protected with industry-standard encryption and two-factor authentication</p>
+            
+            <section class="cta-section">
+                <div class="cta-content">
+                    <h2 class="section-title">Ready to take control?</h2>
+                    <p class="section-subtitle">Start your free trial today. No credit card required.</p>
+                    <a href="auth/signup.html" class="btn btn-primary btn-large" style="margin-top: 2rem;">Sign Up for Free</a>
+                </div>
             </section>
+
         </main>
 
-        <footer class="footer">
-            <p>&copy; 2026 Portfolio Manager. All rights reserved.</p>
+        <footer class="footer" style="padding: 3rem 0; text-align:center; border-top: 1px solid var(--border-color); color: var(--secondary-text-color);">
+            <p>&copy; 2026 CapitalX. All rights reserved.</p>
         </footer>
     </div>
+
 </body>
 </html>

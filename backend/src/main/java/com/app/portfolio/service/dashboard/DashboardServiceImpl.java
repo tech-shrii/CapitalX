@@ -1,9 +1,11 @@
 package com.app.portfolio.service.dashboard;
 
 import com.app.portfolio.beans.Asset;
+import com.app.portfolio.beans.AssetPrice;
 import com.app.portfolio.beans.Client;
 import com.app.portfolio.dto.dashboard.DashboardSummaryResponse;
 import com.app.portfolio.exceptions.ResourceNotFoundException;
+import com.app.portfolio.repository.AssetPriceRepository;
 import com.app.portfolio.repository.AssetRepository;
 import com.app.portfolio.repository.ClientRepository;
 import com.app.portfolio.service.pricing.PricingService;
@@ -14,6 +16,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -25,6 +30,7 @@ public class DashboardServiceImpl implements DashboardService {
     private final ClientRepository clientRepository;
     private final AssetRepository assetRepository;
     private final PricingService pricingService;
+    private final AssetPriceRepository assetPriceRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -41,8 +47,17 @@ public class DashboardServiceImpl implements DashboardService {
 
             List<Asset> unsoldAssets = allAssets.stream().filter(a -> !a.isSold()).collect(Collectors.toList());
 
+            // --- Daily P/L Calculation Setup ---
+            LocalDate today = LocalDate.now(ZoneId.systemDefault());
+            Instant startOfDay = today.atStartOfDay(ZoneId.systemDefault()).toInstant();
+            Instant endOfDay = today.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+            List<AssetPrice> openPrices = assetPriceRepository.findBySourceAndPriceDateBetween(AssetPrice.PriceSource.OPEN, startOfDay, endOfDay);
+            Map<String, BigDecimal> openPriceMap = openPrices.stream()
+                .collect(Collectors.toMap(AssetPrice::getSymbol, AssetPrice::getCurrentPrice, (p1, p2) -> p1));
+            
             BigDecimal totalInvested = BigDecimal.ZERO;
             BigDecimal totalCurrentValue = BigDecimal.ZERO;
+            BigDecimal totalOpenValue = BigDecimal.ZERO;
             Map<String, BigDecimal> assetAllocation = new HashMap<>();
             Map<String, BigDecimal> categoryBreakdown = new HashMap<>();
 
@@ -55,17 +70,24 @@ public class DashboardServiceImpl implements DashboardService {
                         totalCurrentValue = totalCurrentValue.add(asset.getSellingRate().multiply(asset.getQuantity()));
                     }
                 } else {
-                    // Use symbol-based pricing if available, fallback to asset ID
                     BigDecimal currentPrice = (asset.getSymbol() != null && !asset.getSymbol().isEmpty())
                             ? pricingService.getCurrentPriceBySymbolAsBigDecimal(asset.getSymbol())
                             : pricingService.getCurrentPrice(asset.getId());
                     if (currentPrice == null) {
-                        currentPrice = asset.getBuyingRate(); // Fallback to buying rate
+                        currentPrice = asset.getBuyingRate();
                     }
                     BigDecimal currentValue = currentPrice.multiply(asset.getQuantity());
                     totalCurrentValue = totalCurrentValue.add(currentValue);
 
-                    // Asset allocation for unsold assets
+                    // Daily P/L calculation
+                    BigDecimal openPrice = openPriceMap.get(asset.getSymbol().toUpperCase());
+                    if (openPrice != null) {
+                        totalOpenValue = totalOpenValue.add(openPrice.multiply(asset.getQuantity()));
+                    } else {
+                        // Fallback: If no open price, assume it opened at its current value to not skew P/L negatively.
+                        totalOpenValue = totalOpenValue.add(currentValue);
+                    }
+
                     String category = asset.getCategory().name();
                     assetAllocation.put(category, assetAllocation.getOrDefault(category, BigDecimal.ZERO).add(currentValue));
                     categoryBreakdown.put(category, categoryBreakdown.getOrDefault(category, BigDecimal.ZERO).add(currentValue));
@@ -78,6 +100,12 @@ public class DashboardServiceImpl implements DashboardService {
             BigDecimal totalProfitLossPercent = totalInvested.compareTo(BigDecimal.ZERO) > 0
                     ? totalProfitLoss.divide(totalInvested, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
                     : BigDecimal.ZERO;
+            
+            // --- Finalize Daily P/L Calculation ---
+            BigDecimal dailyProfitLoss = totalCurrentValue.subtract(totalOpenValue);
+            BigDecimal dailyProfitLossPercentage = totalOpenValue.compareTo(BigDecimal.ZERO) > 0
+                ? dailyProfitLoss.divide(totalOpenValue, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
+                : BigDecimal.ZERO;
 
             List<DashboardSummaryResponse.ClientSummaryDto> recentClients = clients.stream()
                     .limit(5)
@@ -86,7 +114,6 @@ public class DashboardServiceImpl implements DashboardService {
                         BigDecimal clientPnL = BigDecimal.ZERO;
                         for (Asset asset : clientAssets) {
                             BigDecimal invested = asset.getBuyingRate().multiply(asset.getQuantity());
-                            // Use symbol-based pricing if available, fallback to asset ID
                             BigDecimal finalPrice = asset.isSold() ? asset.getSellingRate() 
                                     : (asset.getSymbol() != null && !asset.getSymbol().isEmpty())
                                     ? pricingService.getCurrentPriceBySymbolAsBigDecimal(asset.getSymbol())
@@ -110,7 +137,6 @@ public class DashboardServiceImpl implements DashboardService {
             List<DashboardSummaryResponse.TopAssetDto> allAssetsWithReturns = unsoldAssets.stream()
                 .map(asset -> {
                     BigDecimal invested = asset.getBuyingRate().multiply(asset.getQuantity());
-                    // Use symbol-based pricing if available, fallback to asset ID
                     BigDecimal currentPrice = (asset.getSymbol() != null && !asset.getSymbol().isEmpty())
                             ? pricingService.getCurrentPriceBySymbolAsBigDecimal(asset.getSymbol())
                             : pricingService.getCurrentPrice(asset.getId());
@@ -140,7 +166,6 @@ public class DashboardServiceImpl implements DashboardService {
                 .limit(5)
                 .collect(Collectors.toList());
 
-            // Portfolio performance for unsold assets
             Map<String, Double> portfolioMap = unsoldAssets.stream()
                 .filter(asset -> asset.getSymbol() != null && !asset.getSymbol().isEmpty())
                 .collect(Collectors.toMap(
@@ -169,7 +194,6 @@ public class DashboardServiceImpl implements DashboardService {
             List<BigDecimal> performanceData;
 
             if (!portfolioMap.isEmpty()) {
-                // Use database historical data for 6 months display
                 log.debug("Fetching portfolio chart for {} symbols: {}", portfolioMap.size(), portfolioMap.keySet());
                 com.app.portfolio.dto.pricing.PortfolioChartResponse portfolioChart =
                     pricingService.getPortfolioChartFromDatabase(portfolioMap, "6mo", "1wk");
@@ -186,7 +210,6 @@ public class DashboardServiceImpl implements DashboardService {
                 } else {
                     log.warn("Portfolio chart returned empty data. portfolioChart={}, data={}", 
                             portfolioChart, portfolioChart != null ? portfolioChart.getData() : "null");
-                    // Fallback to simplified data
                     labels = Arrays.asList("Today");
                     performanceData = Arrays.asList(totalCurrentValue);
                 }
@@ -203,6 +226,8 @@ public class DashboardServiceImpl implements DashboardService {
                     .totalCurrentValue(totalCurrentValue)
                     .totalProfitLoss(totalProfitLoss)
                     .totalProfitLossPercent(totalProfitLossPercent)
+                    .dailyProfitLoss(dailyProfitLoss)
+                    .dailyProfitLossPercentage(dailyProfitLossPercentage)
                     .recentClients(recentClients)
                     .assetAllocation(assetAllocation)
                     .portfolioPerformance(DashboardSummaryResponse.PortfolioPerformanceData.builder()
@@ -244,8 +269,17 @@ public class DashboardServiceImpl implements DashboardService {
 
             List<Asset> unsoldAssets = assets.stream().filter(a -> !a.isSold()).collect(Collectors.toList());
 
+            // --- Daily P/L Calculation Setup ---
+            LocalDate today = LocalDate.now(ZoneId.systemDefault());
+            Instant startOfDay = today.atStartOfDay(ZoneId.systemDefault()).toInstant();
+            Instant endOfDay = today.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+            List<AssetPrice> openPrices = assetPriceRepository.findBySourceAndPriceDateBetween(AssetPrice.PriceSource.OPEN, startOfDay, endOfDay);
+            Map<String, BigDecimal> openPriceMap = openPrices.stream()
+                .collect(Collectors.toMap(AssetPrice::getSymbol, AssetPrice::getCurrentPrice, (p1, p2) -> p1));
+
             BigDecimal totalInvested = BigDecimal.ZERO;
             BigDecimal totalCurrentValue = BigDecimal.ZERO;
+            BigDecimal totalOpenValue = BigDecimal.ZERO;
             Map<String, BigDecimal> assetAllocation = new HashMap<>();
             Map<String, BigDecimal> categoryBreakdown = new HashMap<>();
 
@@ -258,17 +292,24 @@ public class DashboardServiceImpl implements DashboardService {
                         totalCurrentValue = totalCurrentValue.add(asset.getSellingRate().multiply(asset.getQuantity()));
                     }
                 } else {
-                    // Use symbol-based pricing if available, fallback to asset ID
                     BigDecimal currentPrice = (asset.getSymbol() != null && !asset.getSymbol().isEmpty())
                             ? pricingService.getCurrentPriceBySymbolAsBigDecimal(asset.getSymbol())
                             : pricingService.getCurrentPrice(asset.getId());
                     if (currentPrice == null) {
-                        currentPrice = asset.getBuyingRate(); // Fallback to buying rate
+                        currentPrice = asset.getBuyingRate();
                     }
                     BigDecimal currentValue = currentPrice.multiply(asset.getQuantity());
                     totalCurrentValue = totalCurrentValue.add(currentValue);
                     
-                    // Asset allocation by category
+                    // Daily P/L calculation
+                    BigDecimal openPrice = openPriceMap.get(asset.getSymbol().toUpperCase());
+                    if (openPrice != null) {
+                        totalOpenValue = totalOpenValue.add(openPrice.multiply(asset.getQuantity()));
+                    } else {
+                        // Fallback: If no open price, assume it opened at its current value.
+                        totalOpenValue = totalOpenValue.add(currentValue);
+                    }
+                    
                     String category = asset.getCategory().name();
                     assetAllocation.put(category, assetAllocation.getOrDefault(category, BigDecimal.ZERO).add(currentValue));
                     categoryBreakdown.put(category, categoryBreakdown.getOrDefault(category, BigDecimal.ZERO).add(currentValue));
@@ -282,10 +323,15 @@ public class DashboardServiceImpl implements DashboardService {
                     ? totalProfitLoss.divide(totalInvested, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
                     : BigDecimal.ZERO;
 
+            // --- Finalize Daily P/L Calculation ---
+            BigDecimal dailyProfitLoss = totalCurrentValue.subtract(totalOpenValue);
+            BigDecimal dailyProfitLossPercentage = totalOpenValue.compareTo(BigDecimal.ZERO) > 0
+                ? dailyProfitLoss.divide(totalOpenValue, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
+                : BigDecimal.ZERO;
+
             List<DashboardSummaryResponse.TopAssetDto> allAssetsWithReturns = unsoldAssets.stream()
                 .map(asset -> {
                     BigDecimal invested = asset.getBuyingRate().multiply(asset.getQuantity());
-                    // Use symbol-based pricing if available, fallback to asset ID
                     BigDecimal currentPrice = (asset.getSymbol() != null && !asset.getSymbol().isEmpty())
                             ? pricingService.getCurrentPriceBySymbolAsBigDecimal(asset.getSymbol())
                             : pricingService.getCurrentPrice(asset.getId());
@@ -315,7 +361,6 @@ public class DashboardServiceImpl implements DashboardService {
                 .limit(5)
                 .collect(Collectors.toList());
 
-            // Portfolio performance
             Map<String, Double> portfolioMap = unsoldAssets.stream()
                 .filter(asset -> asset.getSymbol() != null && !asset.getSymbol().isEmpty())
                 .collect(Collectors.toMap(
@@ -344,7 +389,6 @@ public class DashboardServiceImpl implements DashboardService {
             List<BigDecimal> performanceData;
             
             if (!portfolioMap.isEmpty()) {
-                // Use database historical data for 6 months display
                 com.app.portfolio.dto.pricing.PortfolioChartResponse portfolioChart = 
                     pricingService.getPortfolioChartFromDatabase(portfolioMap, "6mo", "1wk");
 
@@ -356,7 +400,6 @@ public class DashboardServiceImpl implements DashboardService {
                                     .map(p -> BigDecimal.valueOf(p.getValue()))
                                     .collect(Collectors.toList());
                 } else {
-                    // Fallback to simplified data
                     labels = Arrays.asList("Today");
                     performanceData = Arrays.asList(totalCurrentValue);
                 }
@@ -372,6 +415,8 @@ public class DashboardServiceImpl implements DashboardService {
                     .totalCurrentValue(totalCurrentValue)
                     .totalProfitLoss(totalProfitLoss)
                     .totalProfitLossPercent(totalProfitLossPercent)
+                    .dailyProfitLoss(dailyProfitLoss)
+                    .dailyProfitLossPercentage(dailyProfitLossPercentage)
                     .recentClients(Collections.emptyList())
                     .assetAllocation(assetAllocation)
                     .portfolioPerformance(DashboardSummaryResponse.PortfolioPerformanceData.builder()

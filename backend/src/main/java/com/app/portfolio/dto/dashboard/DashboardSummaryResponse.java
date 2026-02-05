@@ -22,6 +22,8 @@ public class DashboardSummaryResponse {
     private Integer assetCategoryCount;
     private BigDecimal todaysPL;
     private BigDecimal todaysPLPercentage;
+    private BigDecimal dailyProfitLoss;
+    private BigDecimal dailyProfitLossPercentage;
     
     // Additional fields for frontend charts
     private Map<String, BigDecimal> assetAllocation; // Category -> Value

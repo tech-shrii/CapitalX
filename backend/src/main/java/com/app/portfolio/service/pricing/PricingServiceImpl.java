@@ -64,6 +64,7 @@ public class PricingServiceImpl implements PricingService {
      * This ensures existing price data is preserved when migrating to symbol-based pricing
      */
     @PostConstruct
+    @Transactional
     public void runMigrationOnStartup() {
         if (migrationEnabled) {
             try {
@@ -81,6 +82,91 @@ public class PricingServiceImpl implements PricingService {
             }
         } else {
             log.info("Asset price migration is disabled");
+        }
+
+        // Fetch daily open prices after migration
+        try {
+            fetchAndStoreOpenPrices();
+        } catch (Exception e) {
+            log.error("Error during startup fetch of OPEN prices: {}", e.getMessage(), e);
+        }
+    }
+
+    @Transactional
+    public void fetchAndStoreOpenPrices() {
+        log.info("Checking if daily OPEN prices need to be fetched...");
+
+        // Define today's time range
+        LocalDate today = LocalDate.now(ZoneId.systemDefault());
+        Instant startOfDay = today.atStartOfDay(ZoneId.systemDefault()).toInstant();
+        Instant endOfDay = today.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+
+        // Get all unique, non-sold asset symbols
+        List<String> activeSymbols = assetRepository.findAll().stream()
+                .filter(a -> !a.isSold() && a.getSymbol() != null && !a.getSymbol().isEmpty())
+                .map(Asset::getSymbol)
+                .distinct()
+                .collect(Collectors.toList());
+
+        if (activeSymbols.isEmpty()) {
+            log.info("No active assets with symbols found. Skipping OPEN price fetch.");
+            return;
+        }
+
+        // Check if OPEN prices for today already exist for all active symbols
+        long existingOpenPricesCount = assetPriceRepository.countBySourceAndPriceDateBetween(AssetPrice.PriceSource.OPEN, startOfDay, endOfDay);
+
+        if (existingOpenPricesCount >= activeSymbols.size()) {
+            log.info("OPEN prices for today already exist for all active assets. No action needed.");
+            return;
+        }
+
+        log.info("Fetching daily OPEN prices for {} symbols...", activeSymbols.size());
+
+        try {
+            if (!isServiceAvailable()) {
+                log.warn("Pricing service is unavailable, cannot fetch OPEN prices.");
+                return;
+            }
+
+            // Fetch open prices from the pricing service
+            String url = pricingServiceUrl + "/api/prices/bulk/open";
+            Map<String, Double> openPrices = restTemplate.postForObject(url, activeSymbols, Map.class);
+
+            if (openPrices == null || openPrices.isEmpty()) {
+                log.warn("Received no data from the bulk open prices endpoint.");
+                return;
+            }
+            
+            // Map assets by symbol for quick lookup
+            Map<String, Asset> assetMap = assetRepository.findBySymbolIn(activeSymbols).stream()
+                .collect(Collectors.toMap(asset -> asset.getSymbol().toUpperCase(), asset -> asset, (asset1, asset2) -> asset1));
+
+
+            for (Map.Entry<String, Double> entry : openPrices.entrySet()) {
+                String symbol = entry.getKey();
+                Double openPriceValue = entry.getValue();
+
+                if (openPriceValue != null) {
+                    Asset asset = assetMap.get(symbol.toUpperCase());
+                    if (asset != null) {
+                         AssetPrice assetPrice = AssetPrice.builder()
+                            .asset(asset)
+                            .symbol(symbol.toUpperCase())
+                            .currentPrice(BigDecimal.valueOf(openPriceValue))
+                            .priceDate(startOfDay) // Use start of day for consistency
+                            .source(AssetPrice.PriceSource.OPEN)
+                            .build();
+                        assetPriceRepository.save(assetPrice);
+                        log.debug("Saved OPEN price for {}: {}", symbol, openPriceValue);
+                    }
+                }
+            }
+            log.info("Finished fetching and storing daily OPEN prices.");
+
+        } catch (Exception e) {
+            log.error("Error during daily OPEN price fetch: {}", e.getMessage(), e);
+            recordServiceFailure();
         }
     }
 
@@ -111,7 +197,7 @@ public class PricingServiceImpl implements PricingService {
     }
 
     @Override
-    @Scheduled(initialDelay = 30000, fixedRate = 20000) // Initial delay 30s, then every 20s
+    @Scheduled(fixedRate = 40000)
     @Transactional
     public void fetchAndUpdatePrices() {
         try {
@@ -179,13 +265,9 @@ public class PricingServiceImpl implements PricingService {
                         }
                     }
 
-                    // Fallback to individual fetch if bulk failed
+                    // Skip individual fetch - only bulk updates are allowed
                     if (price == null) {
-                        PriceResponse externalPrice = getCurrentPriceBySymbol(symbol);
-                        if (externalPrice != null && externalPrice.getPrice() != null) {
-                            price = BigDecimal.valueOf(externalPrice.getPrice());
-                            hasSuccessfulPrices = true;
-                        }
+                        log.debug("Price for {} not found in bulk fetch, skipping individual fallback as per policy.", symbol);
                     }
 
                     if (price != null) {
@@ -464,15 +546,12 @@ public class PricingServiceImpl implements PricingService {
             Map<String, Double> todayPrices = new HashMap<>();
             for (String symbol : portfolio.keySet()) {
                 try {
-                    PriceResponse priceResponse = getCurrentPriceBySymbol(symbol);
-                    if (priceResponse != null && priceResponse.getPrice() != null) {
-                        BigDecimal livePrice = BigDecimal.valueOf(priceResponse.getPrice());
-                        if (livePrice.compareTo(BigDecimal.ZERO) > 0) {
-                            todayPrices.put(symbol, livePrice.doubleValue());
-                        }
+                    BigDecimal livePrice = getCurrentPriceBySymbolAsBigDecimal(symbol);
+                    if (livePrice.compareTo(BigDecimal.ZERO) > 0) {
+                        todayPrices.put(symbol, livePrice.doubleValue());
                     }
                 } catch (Exception e) {
-                    log.debug("Could not fetch live price for {}: {}", symbol, e.getMessage());
+                    log.debug("Could not fetch latest price from DB for {}: {}", symbol, e.getMessage());
                 }
             }
             
@@ -657,15 +736,12 @@ public class PricingServiceImpl implements PricingService {
             Map<String, Double> todayPrices = new HashMap<>();
             for (String symbol : portfolio.keySet()) {
                 try {
-                    PriceResponse priceResponse = getCurrentPriceBySymbol(symbol);
-                    if (priceResponse != null && priceResponse.getPrice() != null) {
-                        BigDecimal livePrice = BigDecimal.valueOf(priceResponse.getPrice());
-                        if (livePrice.compareTo(BigDecimal.ZERO) > 0) {
-                            todayPrices.put(symbol, livePrice.doubleValue());
-                        }
+                    BigDecimal livePrice = getCurrentPriceBySymbolAsBigDecimal(symbol);
+                    if (livePrice.compareTo(BigDecimal.ZERO) > 0) {
+                        todayPrices.put(symbol, livePrice.doubleValue());
                     }
                 } catch (Exception e) {
-                    log.debug("Could not fetch live price for {}: {}", symbol, e.getMessage());
+                    log.debug("Could not fetch latest price from DB for {}: {}", symbol, e.getMessage());
                 }
             }
             
@@ -938,11 +1014,11 @@ public class PricingServiceImpl implements PricingService {
                         }
                     } else {
                         skippedCount++;
-                        log.debug("Skipping price ID {} - asset symbol is empty", price.getId());
+                        log.warn("Skipping migration for AssetPrice ID {} - associated Asset (ID: {}) has a null or empty symbol.", price.getId(), asset.getId());
                     }
                 } else {
                     skippedCount++;
-                    log.warn("Skipping price ID {} - asset is null (may have been deleted)", price.getId());
+                    log.warn("Skipping migration for AssetPrice ID {} - associated Asset is null (Asset may have been deleted).", price.getId());
                 }
             } catch (Exception e) {
                 errorCount++;

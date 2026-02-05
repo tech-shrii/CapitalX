@@ -12,4 +12,6 @@ public interface AssetRepository extends JpaRepository<Asset, Long> {
     List<Asset> findByClientIdOrderByPurchaseDateTimeDesc(Long clientId);
 
     boolean existsByIdAndClientUserId(Long assetId, Long userId);
+
+    List<Asset> findBySymbolIn(List<String> symbols);
 }

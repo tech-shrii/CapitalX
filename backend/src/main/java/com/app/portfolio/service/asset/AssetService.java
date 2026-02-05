@@ -17,6 +17,8 @@ public interface AssetService {
 
     AssetResponse createAsset(Long clientId, AssetRequest request, Long userId);
 
+    AssetResponse createAsset(AssetRequest request, Long userId);
+
     AssetResponse updateAsset(Long id, AssetRequest request, Long userId);
 
     void deleteAsset(Long id, Long userId);

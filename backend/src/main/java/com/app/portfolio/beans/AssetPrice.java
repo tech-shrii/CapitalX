@@ -40,6 +40,6 @@ public class AssetPrice {
     private PriceSource source;
 
     public enum PriceSource {
-        YFINANCE, MANUAL, FAKE
+        YFINANCE, MANUAL, FAKE, OPEN
     }
 }

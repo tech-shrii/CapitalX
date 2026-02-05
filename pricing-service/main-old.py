@@ -105,8 +105,9 @@ _YAHOO_TO_STOOQ_SUFFIX: Dict[str, str] = {
     ".ax": ".au",
     ".ks": ".kr",
     ".si": ".sg",
-    ".f":  ".de",
+    ".f":  ".f",  # Changed: Frankfurt .F -> .f
     ".de": ".de",
+    ".b":  ".b",  # Added: Yahoo bonds (.B) -> Stooq (.b)
 }
 
 
@@ -114,30 +115,29 @@ def yahoo_to_stooq(symbol: str) -> str:
     """
     Convert a Yahoo-style ticker to the Stooq symbol that the CSV
     endpoint expects.  Always returns lowercase (Stooq convention).
-
-    Examples
-    --------
-    >>> yahoo_to_stooq("AAPL")
-    'aapl.us'
-    >>> yahoo_to_stooq("HSBA.L")
-    'hsba.uk'
-    >>> yahoo_to_stooq("7203.T")
-    '7203.jp'
-    >>> yahoo_to_stooq("RELIANCE.NS")
-    'reliance.ns'
     """
-    symbol = symbol.strip()
+    symbol = symbol.strip().upper()
+
+    # FX rates (e.g. "USDGBP") - 6 chars, no dot. Stooq expects lowercase.
+    if "." not in symbol and len(symbol) == 6:
+        try:
+            # Check if it looks like two 3-letter currency codes
+            from_curr, to_curr = symbol[:3], symbol[3:]
+            if from_curr.isalpha() and to_curr.isalpha():
+                return symbol.lower()
+        except ValueError:
+            pass  # Not a 6-char string
 
     # Split on the LAST dot so numeric tickers like "7203.T" work correctly.
     dot_pos = symbol.rfind(".")
     if dot_pos != -1:
         base   = symbol[:dot_pos]
-        suffix = symbol[dot_pos:].lower()          # e.g. ".l"
+        suffix = symbol[dot_pos:].lower()
         stooq_suffix = _YAHOO_TO_STOOQ_SUFFIX.get(suffix)
         if stooq_suffix:
             return f"{base.lower()}{stooq_suffix}"
-        # Unknown suffix — keep it as-is (lowercased).  Stooq may still
-        # recognise it.
+        # Unknown suffix — keep it as-is (lowercased). Stooq may still
+        # recognise it (e.g. crypto 'BTC-USD').
         return symbol.lower()
 
     # No dot at all → bare US ticker.
@@ -148,136 +148,89 @@ def yahoo_to_stooq(symbol: str) -> str:
 # 2.  STOOQ CLIENT  —  session, rate-limiter, in-memory cache
 # ===========================================================================
 
-_STOOQ_CSV_URL = "https://stooq.com/q/d/l/"
-
-# How many seconds a cached DataFrame stays valid before we re-fetch.
-_CACHE_TTL_SECONDS: int = 300          # 5 minutes
-
-# Minimum gap (seconds) between outgoing HTTP requests to Stooq.
-_MIN_REQUEST_INTERVAL: float = 1.0
-
-# Realistic User-Agent; Stooq is lenient but no reason to advertise Python.
+_STOOQ_BASE_URL = "https://stooq.com/"
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 )
+_http_session = requests.Session()
+_http_session.headers.update({"User-Agent": _USER_AGENT})
 
 
-class _StooqClient:
+@lru_cache(maxsize=512)
+def _stooq_fetch_latest_price_df(stooq_symbol: str) -> pd.DataFrame:
     """
-    Thread-safe singleton that owns:
-        • a requests.Session (connection pooling)
-        • a rate-limiter (minimum inter-request delay)
-        • an in-memory cache: stooq_symbol → (DataFrame, fetched_at)
-
-    Every public method that touches the network goes through here.
+    Fetches the latest quote for a symbol from stooq.com/q/l/.
+    The lru_cache decorator provides simple, in-memory caching.
     """
+    url = f"{_STOOQ_BASE_URL}/q/l/"
+    params = {
+        "s": stooq_symbol,
+        "f": "sd2t2ohlc",  # s=symbol, d2=date, t2=time, o=open, h=high, l=low, c=close
+        "h": "",           # No header
+        "e": "csv",
+    }
+    try:
+        resp = _http_session.get(url, params=params, timeout=10)
+        resp.raise_for_status()
+        text = resp.text
+        if not text or "No data" in text:
+            raise ValueError(f"Stooq: No data for symbol '{stooq_symbol}'")
 
-    def __init__(self) -> None:
-        self._lock            = threading.Lock()
-        self._session         = requests.Session()
-        self._session.headers.update({"User-Agent": _USER_AGENT})
-        self._last_request_at: float = 0.0
-        # cache:  { stooq_symbol: (pd.DataFrame, epoch_fetched) }
-        self._cache: Dict[str, tuple[pd.DataFrame, float]] = {}
+        # Stooq returns a single CSV line: SYMBOL,YYYY-MM-DD,HH:MM:SS,OPEN,HIGH,LOW,CLOSE
+        df = pd.read_csv(
+            StringIO(text),
+            header=None,
+            names=["Symbol", "Date", "Time", "Open", "High", "Low", "Close"],
+        )
+        if df.empty:
+            raise ValueError(f"Stooq: Empty dataset for '{stooq_symbol}'")
+        
+        # Combine Date and Time into a single datetime object
+        df["Timestamp"] = pd.to_datetime(df["Date"] + " " + df["Time"])
+        return df
 
-    # ------------------------------------------------------------------
-    # Internal
-    # ------------------------------------------------------------------
-    def _throttle(self) -> None:
-        elapsed = time.time() - self._last_request_at
-        if elapsed < _MIN_REQUEST_INTERVAL:
-            time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
-
-    # ------------------------------------------------------------------
-    # Public
-    # ------------------------------------------------------------------
-    def fetch_daily(self, stooq_symbol: str, d1: str, d2: str) -> pd.DataFrame:
-        """
-        Return a DataFrame with columns [Date, Open, High, Low, Close, Volume]
-        sorted ascending by Date.
-
-        Uses the cache when the symbol was fetched recently AND d1 is old
-        enough that the cached data covers it.  Otherwise hits the network.
-
-        Raises ValueError if Stooq returns no rows (bad symbol, or the
-        date range has no trading days).
-        """
-        with self._lock:
-            # --- cache check -----------------------------------------------
-            if stooq_symbol in self._cache:
-                cached_df, fetched_at = self._cache[stooq_symbol]
-                if (time.time() - fetched_at) < _CACHE_TTL_SECONDS:
-                    # Slice to requested date range from the cached copy.
-                    sliced = cached_df[
-                        (cached_df["Date"] >= d1) & (cached_df["Date"] <= d2)
-                    ].copy()
-                    if not sliced.empty:
-                        logger.debug("Cache hit for %s", stooq_symbol)
-                        return sliced
-                    # Cache exists but doesn't cover this range — fall through
-                    # to network fetch (could be a wider historical request).
-
-            # --- network fetch ---------------------------------------------
-            self._throttle()
-            url = (
-                f"{_STOOQ_CSV_URL}?s={stooq_symbol}"
-                f"&d1={d1}&d2={d2}&i=d"
-            )
-            logger.info("Stooq fetch: %s", url)
-            resp = self._session.get(url, timeout=15)
-            self._last_request_at = time.time()
-
-            if resp.status_code != 200:
-                raise ValueError(
-                    f"Stooq returned HTTP {resp.status_code} for {stooq_symbol}"
-                )
-
-            # --- parse CSV -------------------------------------------------
-            text = resp.text.strip()
-            if not text or text.startswith("No"):
-                # Stooq returns literally "No data" for unknown symbols.
-                raise ValueError(f"Stooq: no data for symbol '{stooq_symbol}'")
-
-            df = pd.read_csv(StringIO(text))
-
-            # Normalise column names — Stooq occasionally returns with
-            # leading/trailing whitespace.
-            df.columns = [c.strip() for c in df.columns]
-
-            if "Date" not in df.columns or "Close" not in df.columns:
-                raise ValueError(
-                    f"Stooq CSV missing expected columns for '{stooq_symbol}'. "
-                    f"Got: {list(df.columns)}"
-                )
-
-            if df.empty:
-                raise ValueError(f"Stooq: empty dataset for '{stooq_symbol}'")
-
-            df["Date"] = pd.to_datetime(df["Date"])
-            df = df.sort_values("Date").reset_index(drop=True)
-
-            # Ensure numeric columns are floats (Stooq sometimes sends ints).
-            for col in ("Open", "High", "Low", "Close"):
-                df[col] = pd.to_numeric(df[col], errors="coerce")
-            df["Volume"] = pd.to_numeric(df["Volume"], errors="coerce").fillna(0).astype(int)
-
-            # --- update cache ----------------------------------------------
-            # We cache the full fetch so that subsequent slices (different
-            # periods) can reuse it without another HTTP call.
-            self._cache[stooq_symbol] = (df, time.time())
-
-            logger.info(
-                "Stooq fetched %d rows for %s (%s → %s)",
-                len(df), stooq_symbol,
-                df["Date"].iloc[0].date(), df["Date"].iloc[-1].date(),
-            )
-            return df
+    except requests.exceptions.RequestException as e:
+        raise ValueError(f"Stooq request failed for {stooq_symbol}: {e}")
 
 
-# Process-level singleton.
-_stooq = _StooqClient()
+def _stooq_fetch_historical(stooq_symbol: str, d1: str, d2: str) -> pd.DataFrame:
+    """
+    Return a DataFrame with columns [Date, Open, High, Low, Close, Volume]
+    sorted ascending by Date from stooq.com/q/d/l/.
+    """
+    url = f"{_STOOQ_BASE_URL}/q/d/l/"
+    params = {"s": stooq_symbol, "d1": d1, "d2": d2, "i": "d"}
+    
+    logger.info("Stooq historical fetch: %s, params: %s", url, params)
+    resp = _http_session.get(url, params=params, timeout=15)
+    resp.raise_for_status()
+    
+    text = resp.text.strip()
+    if not text or text.startswith("No"):
+        raise ValueError(f"Stooq: no historical data for symbol '{stooq_symbol}'")
 
+    df = pd.read_csv(StringIO(text))
+    df.columns = [c.strip() for c in df.columns]
+
+    if "Date" not in df.columns or "Close" not in df.columns:
+        raise ValueError(f"Stooq CSV missing expected columns for '{stooq_symbol}'")
+    if df.empty:
+        raise ValueError(f"Stooq: empty historical dataset for '{stooq_symbol}'")
+
+    df["Date"] = pd.to_datetime(df["Date"])
+    df = df.sort_values("Date").reset_index(drop=True)
+
+    for col in ("Open", "High", "Low", "Close"):
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    
+    # Handle missing Volume column for bonds/fx
+    if "Volume" in df.columns:
+        df["Volume"] = pd.to_numeric(df["Volume"], errors="coerce").fillna(0).astype(int)
+    else:
+        df["Volume"] = 0
+
+    return df
 
 # ===========================================================================
 # 3.  PERIOD  →  date-range helpers
@@ -331,34 +284,26 @@ def _date_range(period: str) -> tuple[str, str]:
 def scrape_price(symbol: str) -> Dict[str, Any]:
     """
     Get the latest price for *symbol*.
-
-    Tries Stooq first (last row of the 5-day CSV).  Falls back to
-    yfinance if Stooq fails for any reason.
-
-    Returns
-    -------
-    dict with keys: symbol, price, timestamp, currency, change, change_pct
+    Tries Stooq first. Falls back to yfinance if Stooq fails.
     """
     stooq_sym = yahoo_to_stooq(symbol)
 
     # --- attempt 1: Stooq --------------------------------------------------
     try:
-        d1, d2 = _date_range("5d")
-        df = _stooq.fetch_daily(stooq_sym, d1, d2)
-
+        df = _stooq_fetch_latest_price_df(stooq_sym)
         latest = df.iloc[-1]
-        price  = float(latest["Close"])
-
-        # Compute 1-day change if we have ≥2 rows.
-        change     = 0.0
+        price = float(latest["Close"])
+        
+        # Get previous day's close for change calculation
+        hist_df = _stooq_fetch_historical(stooq_sym, d1=(datetime.now() - timedelta(days=5)).strftime("%Y%m%d"), d2=datetime.now().strftime("%Y%m%d"))
+        
+        change = 0.0
         change_pct = 0.0
-        if len(df) >= 2:
-            prev_close = float(df.iloc[-2]["Close"])
+        if len(hist_df) >= 2:
+            prev_close = float(hist_df.iloc[-2]["Close"])
             if prev_close != 0:
-                change     = round(price - prev_close, 2)
+                change = round(price - prev_close, 2)
                 change_pct = round((change / prev_close) * 100, 2)
-
-        timestamp = latest["Date"].strftime("%Y-%m-%dT%H:%M:%S")
 
         logger.info("[Stooq] price for %s: %.2f", symbol.upper(), price)
         return {
@@ -366,10 +311,9 @@ def scrape_price(symbol: str) -> Dict[str, Any]:
             "price":       price,
             "change":      change,
             "change_pct":  change_pct,
-            "currency":    "USD",          # Stooq doesn't expose currency;
-                                           # default USD is correct for .us
+            "currency":    "USD",  # Stooq doesn't provide currency, default is reasonable
             "company_name": "",
-            "timestamp":   timestamp,
+            "timestamp":   latest["Timestamp"].isoformat(),
         }
     except Exception as exc:
         logger.warning("[Stooq] price failed for %s: %s — trying yfinance", symbol, exc)
@@ -377,43 +321,41 @@ def scrape_price(symbol: str) -> Dict[str, Any]:
     # --- attempt 2: yfinance -----------------------------------------------
     try:
         ticker = yf.Ticker(symbol)
-        info   = ticker.info
-        price  = (
-            info.get("currentPrice")
-            or info.get("regularMarketPrice")
-            or info.get("previousClose")
-        )
-        if price is not None:
-            ts_raw = info.get("regularMarketTime")
-            timestamp = (
-                datetime.fromtimestamp(ts_raw).isoformat()
-                if isinstance(ts_raw, (int, float))
-                else datetime.now().isoformat()
-            )
-            logger.info("[yfinance] price for %s: %.2f", symbol.upper(), float(price))
-            return {
-                "symbol":      symbol.upper(),
-                "price":       float(price),
-                "change":      0.0,
-                "change_pct":  0.0,
-                "currency":    info.get("currency", "USD"),
-                "company_name": info.get("shortName", ""),
-                "timestamp":   timestamp,
-            }
+        info = ticker.info
+        
+        price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose")
+        if price is None:
+             # If info fails, try a minimal history fetch
+             hist = ticker.history(period="2d")
+             if not hist.empty:
+                 price = hist['Close'].iloc[-1]
+             else:
+                 raise ValueError("yfinance: No price found in info or history")
 
-        # info had no price — pull one row of history.
-        hist = ticker.history(period="1d", interval="1d")
-        if not hist.empty:
-            logger.info("[yfinance] price (history) for %s: %.2f", symbol.upper(), float(hist["Close"].iloc[-1]))
-            return {
-                "symbol":      symbol.upper(),
-                "price":       float(hist["Close"].iloc[-1]),
-                "change":      0.0,
-                "change_pct":  0.0,
-                "currency":    "USD",
-                "company_name": "",
-                "timestamp":   hist.index[-1].isoformat(),
-            }
+        ts_raw = info.get("regularMarketTime")
+        timestamp = (
+            datetime.fromtimestamp(ts_raw).isoformat()
+            if isinstance(ts_raw, (int, float))
+            else datetime.now().isoformat()
+        )
+        
+        prev_close = info.get('previousClose')
+        change = 0.0
+        change_pct = 0.0
+        if prev_close and prev_close > 0:
+            change = round(price - prev_close, 2)
+            change_pct = round((change / prev_close) * 100, 2)
+
+        logger.info("[yfinance] price for %s: %.2f", symbol.upper(), float(price))
+        return {
+            "symbol":       symbol.upper(),
+            "price":        float(price),
+            "change":       change,
+            "change_pct":   change_pct,
+            "currency":     info.get("currency", "USD"),
+            "company_name": info.get("shortName", ""),
+            "timestamp":    timestamp,
+        }
     except Exception as exc:
         logger.warning("[yfinance] price failed for %s: %s", symbol, exc)
 
@@ -423,13 +365,7 @@ def scrape_price(symbol: str) -> Dict[str, Any]:
 def scrape_chart(symbol: str, period: str = "6mo", interval: Optional[str] = None) -> Dict[str, Any]:
     """
     Get OHLCV chart data for *symbol* over *period*.
-
-    Stooq only exposes daily / weekly / monthly CSV.  We always fetch
-    daily and let the caller slice.  *interval* is accepted for API
-    compatibility but Stooq daily is always used as the base; if the
-    caller wants weekly we down-sample here.
-
-    Falls back to yfinance if Stooq fails.
+    Tries Stooq first. Falls back to yfinance if Stooq fails.
     """
     stooq_sym = yahoo_to_stooq(symbol)
     period_lower = period.lower()
@@ -437,33 +373,11 @@ def scrape_chart(symbol: str, period: str = "6mo", interval: Optional[str] = Non
     # --- attempt 1: Stooq --------------------------------------------------
     try:
         d1, d2 = _date_range(period_lower)
-        df = _stooq.fetch_daily(stooq_sym, d1, d2)
+        df = _stooq_fetch_historical(stooq_sym, d1, d2)
 
-        # Trim to the expected row count for this period.
         max_rows = _PERIOD_ROWS.get(period_lower, len(df))
         df = df.tail(max_rows).reset_index(drop=True)
 
-        # --- optional weekly down-sample ------------------------------------
-        # If the caller explicitly asked for weekly (or the period is ≥ 6mo
-        # and no interval override), keep daily.  We only down-sample when
-        # interval is explicitly "1wk" or "1w".
-        if interval and interval.lower() in ("1wk", "1w", "w"):
-            df["Week"] = df["Date"].dt.isocalendar().week.astype(int)
-            df["Year"] = df["Date"].dt.isocalendar().year.astype(int)
-            df = (
-                df.groupby(["Year", "Week"])
-                .agg(
-                    Date=("Date", "last"),
-                    Open=("Open", "first"),
-                    High=("High", "max"),
-                    Low=("Low", "min"),
-                    Close=("Close", "last"),
-                    Volume=("Volume", "sum"),
-                )
-                .reset_index(drop=True)
-            )
-
-        # --- build response list -------------------------------------------
         chart_data: List[Dict[str, Any]] = []
         for _, row in df.iterrows():
             chart_data.append({
@@ -475,12 +389,11 @@ def scrape_chart(symbol: str, period: str = "6mo", interval: Optional[str] = Non
                 "volume": int(row["Volume"]),
             })
 
-        used_interval = interval if interval else "1d"
         logger.info("[Stooq] chart for %s: %d bars (%s)", symbol.upper(), len(chart_data), period)
         return {
             "symbol":   symbol.upper(),
             "period":   period,
-            "interval": used_interval,
+            "interval": "1d",  # Stooq historical is always daily
             "data":     chart_data,
         }
     except Exception as exc:
@@ -603,7 +516,7 @@ class BulkChartsRequest(BaseModel):
 
 # ── 1. GET /api/price/{symbol} ──────────────────────────────────────────────
 @app.get("/api/price/{symbol}")
-async def get_current_price(symbol: str):
+def get_current_price(symbol: str):
     """Current price for one symbol."""
     try:
         return scrape_price(symbol)
@@ -616,7 +529,7 @@ async def get_current_price(symbol: str):
 
 # ── 2. GET /api/chart/{symbol} ──────────────────────────────────────────────
 @app.get("/api/chart/{symbol}")
-async def get_chart_data(symbol: str, period: str = "6mo", interval: Optional[str] = None):
+def get_chart_data(symbol: str, period: str = "6mo", interval: Optional[str] = None):
     """OHLCV chart for one symbol."""
     valid = ["1d", "5d", "1w", "1mo", "3mo", "6mo", "1y", "5y", "max"]
     if period not in valid:
@@ -632,7 +545,7 @@ async def get_chart_data(symbol: str, period: str = "6mo", interval: Optional[st
 
 # ── 3. POST /api/prices  ────────────────────────────────────────────────────
 @app.post("/api/prices")
-async def get_multiple_prices(symbols: List[str]):
+def get_multiple_prices(symbols: List[str]):
     """Prices for a list of symbols."""
     if not symbols:
         return {"data": {}}
@@ -650,7 +563,7 @@ async def get_multiple_prices(symbols: List[str]):
 
 # ── 4. POST /api/portfolio/value ────────────────────────────────────────────
 @app.post("/api/portfolio/value")
-async def get_portfolio_value(portfolio: Dict[str, float]):
+def get_portfolio_value(portfolio: Dict[str, float]):
     """
     Total portfolio value.
     Body: {"AAPL": 10, "MSFT": 5}   (symbol → quantity)
@@ -684,7 +597,7 @@ async def get_portfolio_value(portfolio: Dict[str, float]):
 
 # ── 5. POST /api/portfolio/chart ────────────────────────────────────────────
 @app.post("/api/portfolio/chart")
-async def get_portfolio_chart(portfolio: Dict[str, float], period: str = "6mo", interval: Optional[str] = None):
+def get_portfolio_chart(portfolio: Dict[str, float], period: str = "6mo", interval: Optional[str] = None):
     """
     Combined portfolio value over time.
 
@@ -775,7 +688,7 @@ async def get_portfolio_chart(portfolio: Dict[str, float], period: str = "6mo", 
 
 # ── 6. POST /api/charts/bulk ────────────────────────────────────────────────
 @app.post("/api/charts/bulk")
-async def bulk_fetch_charts(request: BulkChartsRequest):
+def bulk_fetch_charts(request: BulkChartsRequest):
     """Chart data for multiple symbols in one call."""
     symbols  = [s.strip() for s in request.symbols if s and s.strip()]
     period   = request.period or "6mo"
@@ -796,7 +709,7 @@ async def bulk_fetch_charts(request: BulkChartsRequest):
 
 # ── 7. POST /api/prices/bulk ────────────────────────────────────────────────
 @app.post("/api/prices/bulk")
-async def bulk_fetch_prices(symbols: List[str]):
+def bulk_fetch_prices(symbols: List[str]):
     """
     Optimised bulk price fetch (e.g. at login).
 
@@ -835,7 +748,7 @@ async def bulk_fetch_prices(symbols: List[str]):
 
 # ── 8. GET /api/health ──────────────────────────────────────────────────────
 @app.get("/api/health")
-async def health_check():
+def health_check():
     return {
         "status":          "healthy",
         "timestamp":       datetime.now().isoformat(),
@@ -847,7 +760,7 @@ async def health_check():
 
 # ── 9. POST /api/cache/clear ────────────────────────────────────────────────
 @app.post("/api/cache/clear")
-async def clear_cache():
+def clear_cache():
     """
     Clear both the in-memory Stooq cache and the yfinance disk cache.
     On Windows, yfinance may hold cookies.db open — we skip locked files

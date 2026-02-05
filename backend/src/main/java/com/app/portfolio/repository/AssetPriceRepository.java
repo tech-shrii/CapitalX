@@ -28,7 +28,7 @@ public interface AssetPriceRepository extends JpaRepository<AssetPrice, Long> {
     int updateSymbolByAssetId(@Param("assetId") Long assetId, @Param("symbol") String symbol);
 
     // Migration helper: Get all asset prices that need symbol population
-    @Query("SELECT ap FROM AssetPrice ap WHERE ap.symbol IS NULL AND ap.asset IS NOT NULL")
+    @Query("SELECT ap FROM AssetPrice ap WHERE (ap.symbol IS NULL OR ap.symbol = '') AND ap.asset IS NOT NULL")
     List<AssetPrice> findAllWithoutSymbol();
     
     // Historical data queries for portfolio charts
@@ -45,4 +45,8 @@ public interface AssetPriceRepository extends JpaRepository<AssetPrice, Long> {
     
     @Query("SELECT DISTINCT ap.symbol FROM AssetPrice ap WHERE ap.symbol IN :symbols")
     List<String> findDistinctSymbolsInList(@Param("symbols") List<String> symbols);
+
+    long countBySourceAndPriceDateBetween(AssetPrice.PriceSource source, Instant start, Instant end);
+
+    List<AssetPrice> findBySourceAndPriceDateBetween(AssetPrice.PriceSource source, Instant start, Instant end);
 }

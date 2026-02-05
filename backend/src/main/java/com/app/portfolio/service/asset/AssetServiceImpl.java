@@ -118,6 +118,30 @@ public class AssetServiceImpl implements AssetService {
 
     @Override
     @Transactional
+    public AssetResponse createAsset(AssetRequest request, Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found", userId));
+
+        // Find or create a default client for the user
+        Client defaultClient = clientRepository.findByUser(user).stream().findFirst()
+                .orElseGet(() -> {
+                    Client newClient = Client.builder()
+                            .name(user.getName()) // Use user's name for the default client
+                            .email(user.getEmail())
+                            .user(user)
+                            .currency("USD") // Or some default currency
+                            .build();
+                    return clientRepository.save(newClient);
+                });
+
+        Asset asset = assetMapper.toEntity(request, null);
+        asset.setClient(defaultClient);
+        asset = assetRepository.save(asset);
+        return assetMapper.toResponse(asset);
+    }
+
+    @Override
+    @Transactional
     public AssetResponse updateAsset(Long id, AssetRequest request, Long userId) {
         Asset asset = assetRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Asset", id));

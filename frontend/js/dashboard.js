@@ -13,12 +13,11 @@ document.addEventListener('DOMContentLoaded', () => {
     setupClientSwitcher();
     
     // Start auto-refresh only if no modal is open
-    /* refreshIntervalId = setInterval(() => {
+    refreshIntervalId = setInterval(() => {
         if (!isModalOpen) {
             refreshData();
         }
-    }, 10000); // Auto-refresh every 10 seconds */
-    console.log('[DEBUG] Auto-refresh interval set:', refreshIntervalId);
+    }, 40000); // Auto-refresh every 40 seconds
 
     const addClientBtnHeader = document.getElementById('addClientBtnHeader');
     console.log('[DEBUG] addClientBtnHeader found:', !!addClientBtnHeader);
@@ -178,28 +177,35 @@ async function loadDashboardData() {
         document.getElementById('totalInvestment').textContent = formatCurrency(data.totalInvested || 0, defaultCurrency);
         document.getElementById('assetCategoryCount').textContent = data.assetCategoryCount || 0;
 
-        const todaysPLValue = data.todaysPL || 0;
-        const todaysPL = document.getElementById('todaysPL');
-        if (todaysPL) {
-            todaysPL.textContent = formatCurrency(todaysPLValue, defaultCurrency);
-            todaysPL.classList.toggle('positive', todaysPLValue >= 0);
-            todaysPL.classList.toggle('negative', todaysPLValue < 0);
-        }
-        
-        const todaysPLPercentageValue = data.todaysPLPercentage || 0;
-        const todaysPLPercentage = document.getElementById('todaysPLPercentage');
-        if (todaysPLPercentage) {
-            todaysPLPercentage.textContent = formatPercent(todaysPLPercentageValue);
-            todaysPLPercentage.classList.toggle('positive', todaysPLPercentageValue >= 0);
-            todaysPLPercentage.classList.toggle('negative', todaysPLPercentageValue < 0);
-        }
-        
         const pnl = data.totalProfitLoss || 0;
         const pnlPercent = data.totalProfitLossPercent || 0;
         const totalReturnsPercentage = document.getElementById('totalReturnsPercentage');
-        totalReturnsPercentage.textContent = `${formatPercent(pnlPercent)} overall return`;
-        totalReturnsPercentage.classList.toggle('positive', pnl >= 0);
-        totalReturnsPercentage.classList.toggle('negative', pnl < 0);
+        if (totalReturnsPercentage) {
+            totalReturnsPercentage.textContent = `${formatPercent(pnlPercent)} overall return`;
+            totalReturnsPercentage.classList.toggle('positive', pnl >= 0);
+            totalReturnsPercentage.classList.toggle('negative', pnl < 0);
+        }
+
+        // --- Today's Overall P/L Card ---
+        const dailyPLCard = document.getElementById('todaysPL')?.parentElement;
+        if (dailyPLCard) {
+            // Update title dynamically
+            const titleEl = dailyPLCard.querySelector('.kpi-title');
+            if (titleEl) titleEl.textContent = "Today's Overall P/L";
+
+            // Populate with new daily P/L data from open prices
+            const dailyPLValue = data.dailyProfitLoss || 0;
+            const dailyPL = document.getElementById('todaysPL');
+            dailyPL.textContent = formatCurrency(dailyPLValue, defaultCurrency);
+            dailyPL.classList.toggle('positive', dailyPLValue >= 0);
+            dailyPL.classList.toggle('negative', dailyPLValue < 0);
+            
+            const dailyPLPercentageValue = data.dailyProfitLossPercentage || 0;
+            const dailyPLPercentage = document.getElementById('todaysPLPercentage');
+            dailyPLPercentage.textContent = formatPercent(dailyPLPercentageValue) + ' today';
+            dailyPLPercentage.classList.toggle('positive', dailyPLPercentageValue >= 0);
+            dailyPLPercentage.classList.toggle('negative', dailyPLPercentageValue < 0);
+        }
 
         // Update charts
         updatePieChart(data.assetAllocation);

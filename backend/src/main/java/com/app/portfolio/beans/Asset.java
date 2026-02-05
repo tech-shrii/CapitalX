@@ -29,8 +29,8 @@ public class Asset {
     @Column(nullable = false)
     private String name;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Enumerated(EnumType.ORDINAL)
+    @Column(nullable = false)
     private AssetCategory category;
 
     @Column(length = 50)
@@ -43,10 +43,19 @@ public class Asset {
     private BigDecimal buyingRate;
 
     @Column(name = "purchase_date", nullable = false)
-    private LocalDate purchaseDate;
+    private Instant purchaseDateTime;
 
     @Column(length = 3)
     private String currency;
+
+    @Column(name = "selling_rate", precision = 20, scale = 4)
+    private BigDecimal sellingRate;
+
+    @Column(name = "selling_date_time")
+    private Instant sellingDateTime;
+
+    @Column(nullable = false)
+    private boolean sold = false;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

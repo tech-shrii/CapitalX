@@ -2,22 +2,28 @@ package com.app.portfolio.controller;
 
 import com.app.portfolio.dto.client.ClientRequest;
 import com.app.portfolio.dto.client.ClientResponse;
+import com.app.portfolio.dto.pricing.PortfolioChartResponse;
 import com.app.portfolio.security.UserPrincipal;
 import com.app.portfolio.service.client.ClientService;
+import com.app.portfolio.service.pricing.PricingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/clients")
 @RequiredArgsConstructor
 public class ClientController {
 
     private final ClientService clientService;
+    private final PricingService pricingService;
 
     @GetMapping
     public ResponseEntity<List<ClientResponse>> getAllClients(@AuthenticationPrincipal UserPrincipal userPrincipal) {
@@ -48,5 +54,20 @@ public class ClientController {
                                            @AuthenticationPrincipal UserPrincipal userPrincipal) {
         clientService.deleteClient(id, userPrincipal.getId());
         return ResponseEntity.ok().body(java.util.Map.of("message", "Client deleted successfully"));
+    }
+
+    /**
+     * Get portfolio chart for a client using database (MANUAL source only)
+     * Expects portfolio map: {"AAPL": 10, "MSFT": 5} (symbol: quantity)
+     */
+    @PostMapping("/{clientId}/portfolio/chart")
+    public ResponseEntity<PortfolioChartResponse> getClientPortfolioChart(
+            @PathVariable Long clientId,
+            @RequestBody Map<String, Double> portfolio,
+            @RequestParam(defaultValue = "6mo") String period,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        log.debug("Fetching client {} portfolio chart with period: {}", clientId, period);
+        PortfolioChartResponse response = pricingService.getClientPortfolioChartFromDatabase(portfolio, period);
+        return ResponseEntity.ok(response);
     }
 }

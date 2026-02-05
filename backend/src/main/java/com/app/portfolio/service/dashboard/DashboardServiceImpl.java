@@ -35,9 +35,11 @@ public class DashboardServiceImpl implements DashboardService {
             log.debug("Found {} clients for userId: {}", clients.size(), userId);
             
             List<Asset> allAssets = clients.stream()
-                    .flatMap(client -> assetRepository.findByClientIdOrderByPurchaseDateDesc(client.getId()).stream())
+                    .flatMap(client -> assetRepository.findByClientIdOrderByPurchaseDateTimeDesc(client.getId()).stream())
                     .collect(Collectors.toList());
             log.debug("Found {} total assets across all clients", allAssets.size());
+
+            List<Asset> unsoldAssets = allAssets.stream().filter(a -> !a.isSold()).collect(Collectors.toList());
 
             BigDecimal totalInvested = BigDecimal.ZERO;
             BigDecimal totalCurrentValue = BigDecimal.ZERO;
@@ -46,18 +48,28 @@ public class DashboardServiceImpl implements DashboardService {
 
             for (Asset asset : allAssets) {
                 BigDecimal invested = asset.getBuyingRate().multiply(asset.getQuantity());
-                BigDecimal currentPrice = pricingService.getCurrentPrice(asset.getId());
-                if (currentPrice == null) {
-                    currentPrice = asset.getBuyingRate(); // Fallback to buying rate
-                }
-                BigDecimal currentValue = currentPrice.multiply(asset.getQuantity());
                 totalInvested = totalInvested.add(invested);
-                totalCurrentValue = totalCurrentValue.add(currentValue);
                 
-                // Asset allocation by category
-                String category = asset.getCategory().name();
-                assetAllocation.put(category, assetAllocation.getOrDefault(category, BigDecimal.ZERO).add(currentValue));
-                categoryBreakdown.put(category, categoryBreakdown.getOrDefault(category, BigDecimal.ZERO).add(currentValue));
+                if (asset.isSold()) {
+                    if(asset.getSellingRate() != null) {
+                        totalCurrentValue = totalCurrentValue.add(asset.getSellingRate().multiply(asset.getQuantity()));
+                    }
+                } else {
+                    // Use symbol-based pricing if available, fallback to asset ID
+                    BigDecimal currentPrice = (asset.getSymbol() != null && !asset.getSymbol().isEmpty())
+                            ? pricingService.getCurrentPriceBySymbolAsBigDecimal(asset.getSymbol())
+                            : pricingService.getCurrentPrice(asset.getId());
+                    if (currentPrice == null) {
+                        currentPrice = asset.getBuyingRate(); // Fallback to buying rate
+                    }
+                    BigDecimal currentValue = currentPrice.multiply(asset.getQuantity());
+                    totalCurrentValue = totalCurrentValue.add(currentValue);
+
+                    // Asset allocation for unsold assets
+                    String category = asset.getCategory().name();
+                    assetAllocation.put(category, assetAllocation.getOrDefault(category, BigDecimal.ZERO).add(currentValue));
+                    categoryBreakdown.put(category, categoryBreakdown.getOrDefault(category, BigDecimal.ZERO).add(currentValue));
+                }
             }
 
             Integer assetCategoryCount = assetAllocation.keySet().size();
@@ -70,16 +82,20 @@ public class DashboardServiceImpl implements DashboardService {
             List<DashboardSummaryResponse.ClientSummaryDto> recentClients = clients.stream()
                     .limit(5)
                     .map(client -> {
-                        List<Asset> clientAssets = assetRepository.findByClientIdOrderByPurchaseDateDesc(client.getId());
+                        List<Asset> clientAssets = assetRepository.findByClientIdOrderByPurchaseDateTimeDesc(client.getId());
                         BigDecimal clientPnL = BigDecimal.ZERO;
                         for (Asset asset : clientAssets) {
                             BigDecimal invested = asset.getBuyingRate().multiply(asset.getQuantity());
-                            BigDecimal currentPrice = pricingService.getCurrentPrice(asset.getId());
-                            if (currentPrice == null) {
-                                currentPrice = asset.getBuyingRate();
+                            // Use symbol-based pricing if available, fallback to asset ID
+                            BigDecimal finalPrice = asset.isSold() ? asset.getSellingRate() 
+                                    : (asset.getSymbol() != null && !asset.getSymbol().isEmpty())
+                                    ? pricingService.getCurrentPriceBySymbolAsBigDecimal(asset.getSymbol())
+                                    : pricingService.getCurrentPrice(asset.getId());
+                            if (finalPrice == null) {
+                                finalPrice = asset.getBuyingRate();
                             }
-                            BigDecimal currentValue = currentPrice.multiply(asset.getQuantity());
-                            clientPnL = clientPnL.add(currentValue.subtract(invested));
+                            BigDecimal finalValue = finalPrice.multiply(asset.getQuantity());
+                            clientPnL = clientPnL.add(finalValue.subtract(invested));
                         }
                         return DashboardSummaryResponse.ClientSummaryDto.builder()
                                 .id(client.getId())
@@ -91,10 +107,13 @@ public class DashboardServiceImpl implements DashboardService {
                     })
                     .collect(Collectors.toList());
 
-            List<DashboardSummaryResponse.TopAssetDto> allAssetsWithReturns = allAssets.stream()
+            List<DashboardSummaryResponse.TopAssetDto> allAssetsWithReturns = unsoldAssets.stream()
                 .map(asset -> {
                     BigDecimal invested = asset.getBuyingRate().multiply(asset.getQuantity());
-                    BigDecimal currentPrice = pricingService.getCurrentPrice(asset.getId());
+                    // Use symbol-based pricing if available, fallback to asset ID
+                    BigDecimal currentPrice = (asset.getSymbol() != null && !asset.getSymbol().isEmpty())
+                            ? pricingService.getCurrentPriceBySymbolAsBigDecimal(asset.getSymbol())
+                            : pricingService.getCurrentPrice(asset.getId());
                     if (currentPrice == null) {
                         currentPrice = asset.getBuyingRate();
                     }
@@ -121,8 +140,8 @@ public class DashboardServiceImpl implements DashboardService {
                 .limit(5)
                 .collect(Collectors.toList());
 
-            // Portfolio performance
-            Map<String, Double> portfolioMap = allAssets.stream()
+            // Portfolio performance for unsold assets
+            Map<String, Double> portfolioMap = unsoldAssets.stream()
                 .filter(asset -> asset.getSymbol() != null && !asset.getSymbol().isEmpty())
                 .collect(Collectors.toMap(
                     Asset::getSymbol,
@@ -150,26 +169,33 @@ public class DashboardServiceImpl implements DashboardService {
             List<BigDecimal> performanceData;
 
             if (!portfolioMap.isEmpty()) {
+                // Use database historical data for 6 months display
+                log.debug("Fetching portfolio chart for {} symbols: {}", portfolioMap.size(), portfolioMap.keySet());
                 com.app.portfolio.dto.pricing.PortfolioChartResponse portfolioChart =
-                    pricingService.getPortfolioChart(portfolioMap, "6m", "1wk");
+                    pricingService.getPortfolioChartFromDatabase(portfolioMap, "6mo", "1wk");
 
                 if (portfolioChart != null && portfolioChart.getData() != null && !portfolioChart.getData().isEmpty()) {
+                    log.debug("Portfolio chart returned {} data points", portfolioChart.getData().size());
                     labels = portfolioChart.getData().stream()
                                     .map(com.app.portfolio.dto.pricing.PortfolioChartDataPoint::getTime)
                                     .collect(Collectors.toList());
                     performanceData = portfolioChart.getData().stream()
                                     .map(p -> BigDecimal.valueOf(p.getValue()))
                                     .collect(Collectors.toList());
+                    log.debug("Processed {} labels and {} performance data points", labels.size(), performanceData.size());
                 } else {
+                    log.warn("Portfolio chart returned empty data. portfolioChart={}, data={}", 
+                            portfolioChart, portfolioChart != null ? portfolioChart.getData() : "null");
                     // Fallback to simplified data
                     labels = Arrays.asList("Today");
                     performanceData = Arrays.asList(totalCurrentValue);
                 }
             } else {
+                log.debug("Portfolio map is empty, no chart data");
                 labels = Collections.emptyList();
                 performanceData = Collections.emptyList();
             }
-
+        
             DashboardSummaryResponse response = DashboardSummaryResponse.builder()
                     .totalClients((long) clients.size())
                     .totalAssets((long) allAssets.size())
@@ -213,8 +239,10 @@ public class DashboardServiceImpl implements DashboardService {
             Client client = clientRepository.findById(clientId)
                     .orElseThrow(() -> new ResourceNotFoundException("Client", clientId));
             
-            List<Asset> assets = assetRepository.findByClientIdOrderByPurchaseDateDesc(clientId);
+            List<Asset> assets = assetRepository.findByClientIdOrderByPurchaseDateTimeDesc(clientId);
             log.debug("Found {} assets for clientId: {}", assets.size(), clientId);
+
+            List<Asset> unsoldAssets = assets.stream().filter(a -> !a.isSold()).collect(Collectors.toList());
 
             BigDecimal totalInvested = BigDecimal.ZERO;
             BigDecimal totalCurrentValue = BigDecimal.ZERO;
@@ -223,18 +251,28 @@ public class DashboardServiceImpl implements DashboardService {
 
             for (Asset asset : assets) {
                 BigDecimal invested = asset.getBuyingRate().multiply(asset.getQuantity());
-                BigDecimal currentPrice = pricingService.getCurrentPrice(asset.getId());
-                if (currentPrice == null) {
-                    currentPrice = asset.getBuyingRate(); // Fallback to buying rate
-                }
-                BigDecimal currentValue = currentPrice.multiply(asset.getQuantity());
                 totalInvested = totalInvested.add(invested);
-                totalCurrentValue = totalCurrentValue.add(currentValue);
-                
-                // Asset allocation by category
-                String category = asset.getCategory().name();
-                assetAllocation.put(category, assetAllocation.getOrDefault(category, BigDecimal.ZERO).add(currentValue));
-                categoryBreakdown.put(category, categoryBreakdown.getOrDefault(category, BigDecimal.ZERO).add(currentValue));
+
+                if(asset.isSold()){
+                    if(asset.getSellingRate() != null){
+                        totalCurrentValue = totalCurrentValue.add(asset.getSellingRate().multiply(asset.getQuantity()));
+                    }
+                } else {
+                    // Use symbol-based pricing if available, fallback to asset ID
+                    BigDecimal currentPrice = (asset.getSymbol() != null && !asset.getSymbol().isEmpty())
+                            ? pricingService.getCurrentPriceBySymbolAsBigDecimal(asset.getSymbol())
+                            : pricingService.getCurrentPrice(asset.getId());
+                    if (currentPrice == null) {
+                        currentPrice = asset.getBuyingRate(); // Fallback to buying rate
+                    }
+                    BigDecimal currentValue = currentPrice.multiply(asset.getQuantity());
+                    totalCurrentValue = totalCurrentValue.add(currentValue);
+                    
+                    // Asset allocation by category
+                    String category = asset.getCategory().name();
+                    assetAllocation.put(category, assetAllocation.getOrDefault(category, BigDecimal.ZERO).add(currentValue));
+                    categoryBreakdown.put(category, categoryBreakdown.getOrDefault(category, BigDecimal.ZERO).add(currentValue));
+                }
             }
 
             Integer assetCategoryCount = assetAllocation.keySet().size();
@@ -244,10 +282,13 @@ public class DashboardServiceImpl implements DashboardService {
                     ? totalProfitLoss.divide(totalInvested, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
                     : BigDecimal.ZERO;
 
-            List<DashboardSummaryResponse.TopAssetDto> allAssetsWithReturns = assets.stream()
+            List<DashboardSummaryResponse.TopAssetDto> allAssetsWithReturns = unsoldAssets.stream()
                 .map(asset -> {
                     BigDecimal invested = asset.getBuyingRate().multiply(asset.getQuantity());
-                    BigDecimal currentPrice = pricingService.getCurrentPrice(asset.getId());
+                    // Use symbol-based pricing if available, fallback to asset ID
+                    BigDecimal currentPrice = (asset.getSymbol() != null && !asset.getSymbol().isEmpty())
+                            ? pricingService.getCurrentPriceBySymbolAsBigDecimal(asset.getSymbol())
+                            : pricingService.getCurrentPrice(asset.getId());
                     if (currentPrice == null) {
                         currentPrice = asset.getBuyingRate();
                     }
@@ -275,7 +316,7 @@ public class DashboardServiceImpl implements DashboardService {
                 .collect(Collectors.toList());
 
             // Portfolio performance
-            Map<String, Double> portfolioMap = assets.stream()
+            Map<String, Double> portfolioMap = unsoldAssets.stream()
                 .filter(asset -> asset.getSymbol() != null && !asset.getSymbol().isEmpty())
                 .collect(Collectors.toMap(
                     Asset::getSymbol,
@@ -303,8 +344,9 @@ public class DashboardServiceImpl implements DashboardService {
             List<BigDecimal> performanceData;
             
             if (!portfolioMap.isEmpty()) {
+                // Use database historical data for 6 months display
                 com.app.portfolio.dto.pricing.PortfolioChartResponse portfolioChart = 
-                    pricingService.getPortfolioChart(portfolioMap, "6m", "1wk");
+                    pricingService.getPortfolioChartFromDatabase(portfolioMap, "6mo", "1wk");
 
                 if (portfolioChart != null && portfolioChart.getData() != null && !portfolioChart.getData().isEmpty()) {
                     labels = portfolioChart.getData().stream()

@@ -9,7 +9,7 @@ import java.util.List;
 @Repository
 public interface AssetRepository extends JpaRepository<Asset, Long> {
 
-    List<Asset> findByClientIdOrderByPurchaseDateDesc(Long clientId);
+    List<Asset> findByClientIdOrderByPurchaseDateTimeDesc(Long clientId);
 
     boolean existsByIdAndClientUserId(Long assetId, Long userId);
 }

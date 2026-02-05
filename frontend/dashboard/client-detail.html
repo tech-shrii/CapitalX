@@ -110,8 +110,8 @@
                         <input type="number" id="assetBuyingRate" step="0.01" required>
                     </div>
                     <div class="form-group">
-                        <label>Purchase Date</label>
-                        <input type="date" id="assetPurchaseDate" required>
+                        <label>Purchase Date & Time</label>
+                        <input type="datetime-local" id="assetPurchaseDateTime" required>
                     </div>
                     <div class="form-group">
                         <label>Currency</label>
@@ -125,6 +125,23 @@
                             <option value="CAD">CAD</option>
                             <option value="AUD">AUD</option>
                         </select>
+                    </div>
+                    <hr>
+                    <div class="form-group">
+                        <label class="checkbox-label" for="assetSold">
+                            <input type="checkbox" id="assetSold">
+                            <span>Asset is Sold</span>
+                        </label>
+                    </div>
+                    <div id="selling-info-client" class="hidden">
+                        <div class="form-group">
+                            <label>Selling Rate</label>
+                            <input type="number" id="assetSellingRate" step="0.01">
+                        </div>
+                        <div class="form-group">
+                            <label>Selling Date & Time</label>
+                            <input type="datetime-local" id="assetSellingDateTime">
+                        </div>
                     </div>
                     <button type="submit" class="btn btn-primary">Add Asset</button>
                 </form>

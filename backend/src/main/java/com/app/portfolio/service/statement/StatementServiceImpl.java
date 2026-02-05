@@ -43,8 +43,10 @@ public class StatementServiceImpl implements StatementService {
         String fileName = "Statement_" + client.getName() + "_" + 
                 java.time.LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + ".pdf";
         
-        String emailTo = request.getEmailTo() != null ? request.getEmailTo() : client.getEmail();
-        emailService.sendStatementEmail(emailTo, client.getName(), pdfBytes, fileName);
+        String emailTo = request.getEmailTo();
+        if (emailTo != null && !emailTo.trim().isEmpty()) {
+            emailService.sendStatementEmail(emailTo, client.getName(), pdfBytes, fileName);
+        }
     }
 
     private byte[] generatePdf(Client client, StatementRequest.StatementType statementType) {
@@ -73,7 +75,7 @@ public class StatementServiceImpl implements StatementService {
             document.add(new Paragraph("Date: " + java.time.LocalDate.now().toString(), normalFont));
             document.add(new Paragraph(" "));
 
-            List<Asset> assets = assetRepository.findByClientIdOrderByPurchaseDateDesc(client.getId());
+            List<Asset> assets = assetRepository.findByClientIdOrderByPurchaseDateTimeDesc(client.getId());
             
             if (statementType == StatementRequest.StatementType.BASIC_PNL) {
                 addBasicPnLContent(document, client, assets, headerFont, normalFont);
@@ -100,7 +102,14 @@ public class StatementServiceImpl implements StatementService {
 
         for (Asset asset : assets) {
             BigDecimal invested = asset.getBuyingRate().multiply(asset.getQuantity());
-            BigDecimal currentPrice = pricingService.getCurrentPrice(asset.getId());
+            // Use symbol-based pricing if available, fallback to asset ID
+            BigDecimal currentPrice = asset.isSold() ? asset.getSellingRate() 
+                    : (asset.getSymbol() != null && !asset.getSymbol().isEmpty())
+                    ? pricingService.getCurrentPriceBySymbolAsBigDecimal(asset.getSymbol())
+                    : pricingService.getCurrentPrice(asset.getId());
+            if (currentPrice == null) {
+                currentPrice = asset.getBuyingRate();
+            }
             BigDecimal currentValue = currentPrice.multiply(asset.getQuantity());
             totalInvested = totalInvested.add(invested);
             totalCurrentValue = totalCurrentValue.add(currentValue);
@@ -112,11 +121,31 @@ public class StatementServiceImpl implements StatementService {
                 .multiply(BigDecimal.valueOf(100))
                 : BigDecimal.ZERO;
 
-        document.add(new Paragraph("Total Invested: ₹" + totalInvested, normalFont));
-        document.add(new Paragraph("Current Value: ₹" + totalCurrentValue, normalFont));
-        document.add(new Paragraph("Profit/Loss: ₹" + totalPnL, normalFont));
+        String currencySymbol = getCurrencySymbol(client.getCurrency());
+
+        document.add(new Paragraph("Total Invested: " + currencySymbol + totalInvested, normalFont));
+        document.add(new Paragraph("Current Value: " + currencySymbol + totalCurrentValue, normalFont));
+        document.add(new Paragraph("Profit/Loss: " + currencySymbol + totalPnL, normalFont));
         document.add(new Paragraph("Profit/Loss %: " + totalPnLPercent + "%", normalFont));
     }
+
+    private String getCurrencySymbol(String currencyCode) {
+        return switch (currencyCode.toUpperCase()) {
+            case "USD" -> "$";
+            case "EUR" -> "€";
+            case "GBP" -> "£";
+            case "JPY" -> "¥";
+            case "INR" -> "₹";
+            case "CHF" -> "CHF "; // Swiss Franc
+            case "CAD" -> "C$";   // Canadian Dollar
+            case "AUD" -> "A$";   // Australian Dollar
+            case "CNY" -> "¥";   // Chinese Yuan
+            case "SGD" -> "S$";   // Singapore Dollar
+            case "HKD" -> "HK$";   // Hong Kong Dollar
+            default -> currencyCode + " ";
+        };
+    }
+
 
     private void addDetailedContent(Document document, Client client, List<Asset> assets,
                                     Font headerFont, Font normalFont) throws DocumentException {
@@ -132,23 +161,32 @@ public class StatementServiceImpl implements StatementService {
         table.addCell(new com.lowagie.text.Cell(new Phrase("Category", headerFont)));
         table.addCell(new com.lowagie.text.Cell(new Phrase("Quantity", headerFont)));
         table.addCell(new com.lowagie.text.Cell(new Phrase("Buying Rate", headerFont)));
-        table.addCell(new com.lowagie.text.Cell(new Phrase("Current Price", headerFont)));
+        table.addCell(new com.lowagie.text.Cell(new Phrase("Final Price", headerFont)));
         table.addCell(new com.lowagie.text.Cell(new Phrase("P&L", headerFont)));
-        table.addCell(new com.lowagie.text.Cell(new Phrase("Purchase Date", headerFont)));
+        table.addCell(new com.lowagie.text.Cell(new Phrase("Purchase Date & Time", headerFont)));
 
         for (Asset asset : assets) {
-            BigDecimal currentPrice = pricingService.getCurrentPrice(asset.getId());
+            // Use symbol-based pricing if available, fallback to asset ID
+            BigDecimal finalPrice = asset.isSold() ? asset.getSellingRate() 
+                    : (asset.getSymbol() != null && !asset.getSymbol().isEmpty())
+                    ? pricingService.getCurrentPriceBySymbolAsBigDecimal(asset.getSymbol())
+                    : pricingService.getCurrentPrice(asset.getId());
+            if(finalPrice == null) {
+                finalPrice = asset.getBuyingRate();
+            }
             BigDecimal invested = asset.getBuyingRate().multiply(asset.getQuantity());
-            BigDecimal currentValue = currentPrice.multiply(asset.getQuantity());
-            BigDecimal pnl = currentValue.subtract(invested);
+            BigDecimal finalValue = finalPrice.multiply(asset.getQuantity());
+            BigDecimal pnl = finalValue.subtract(invested);
+
+            String currencySymbol = getCurrencySymbol(asset.getCurrency());
 
             table.addCell(new com.lowagie.text.Cell(new Phrase(asset.getName(), normalFont)));
             table.addCell(new com.lowagie.text.Cell(new Phrase(asset.getCategory().name(), normalFont)));
             table.addCell(new com.lowagie.text.Cell(new Phrase(asset.getQuantity().toString(), normalFont)));
-            table.addCell(new com.lowagie.text.Cell(new Phrase("₹" + asset.getBuyingRate(), normalFont)));
-            table.addCell(new com.lowagie.text.Cell(new Phrase("₹" + currentPrice, normalFont)));
-            table.addCell(new com.lowagie.text.Cell(new Phrase("₹" + pnl, normalFont)));
-            table.addCell(new com.lowagie.text.Cell(new Phrase(asset.getPurchaseDate().toString(), normalFont)));
+            table.addCell(new com.lowagie.text.Cell(new Phrase(currencySymbol + asset.getBuyingRate(), normalFont)));
+            table.addCell(new com.lowagie.text.Cell(new Phrase(currencySymbol + finalPrice, normalFont)));
+            table.addCell(new com.lowagie.text.Cell(new Phrase(currencySymbol + pnl, normalFont)));
+            table.addCell(new com.lowagie.text.Cell(new Phrase(asset.getPurchaseDateTime().toString(), normalFont)));
         }
 
         document.add(table);

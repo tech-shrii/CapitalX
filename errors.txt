@@ -1,0 +1,43 @@
+[API] Sending request...
+api.js:36   GET http://localhost:8080/api/clients/14/assets 404 (Not Found)
+apiCall @ api.js:36
+loadAssetCategoryTab @ dashboard.js:922
+loadTab @ dashboard.js:139
+(anonymous) @ dashboard.js:114
+api.js:37 [API] Response status: 404 
+api.js:38 [API] Response headers: {cache-control: 'no-cache, no-store, max-age=0, must-revalidate', content-type: 'application/json', expires: '0', pragma: 'no-cache'}
+api.js:42 [API] Response content-type: application/json
+api.js:48 [API] Response data: {message: 'Client not found with id: 14', status: 404, timestamp: '2026-02-04T11:33:38.847835500Z'}
+api.js:72  [API] Error response: Client not found with id: 14
+apiCall @ api.js:72
+await in apiCall
+loadAssetCategoryTab @ dashboard.js:922
+loadTab @ dashboard.js:139
+(anonymous) @ dashboard.js:114
+api.js:79  [API] Request failed: Error: Client not found with id: 14
+    at apiCall (api.js:73:19)
+    at async loadAssetCategoryTab (dashboard.js:922:24)
+apiCall @ api.js:79
+await in apiCall
+loadAssetCategoryTab @ dashboard.js:922
+loadTab @ dashboard.js:139
+(anonymous) @ dashboard.js:114
+api.js:80  [API] Error stack: Error: Client not found with id: 14
+    at apiCall (http://127.0.0.1:5501/frontend/js/api.js:73:19)
+    at async loadAssetCategoryTab (http://127.0.0.1:5501/frontend/js/dashboard.js:922:24)
+apiCall @ api.js:80
+await in apiCall
+loadAssetCategoryTab @ dashboard.js:922
+loadTab @ dashboard.js:139
+(anonymous) @ dashboard.js:114
+dashboard.js:1011  Error loading assets for stock: Error: Client not found with id: 14
+    at apiCall (api.js:73:19)
+    at async loadAssetCategoryTab (dashboard.js:922:24)
+loadAssetCategoryTab @ dashboard.js:1011
+await in loadAssetCategoryTab
+loadTab @ dashboard.js:139
+(anonymous) @ dashboard.js:114
+dashboard.js:899 [DEBUG] loadAssetCategoryTab - addAssetBtn found: true for category: stock
+dashboard.js:901 [DEBUG] Attaching click listener to addAssetBtn
+dashboard.js:913 [DEBUG] Click listener attached successfully
+

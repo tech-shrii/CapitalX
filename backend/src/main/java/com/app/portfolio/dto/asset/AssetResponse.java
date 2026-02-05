@@ -19,11 +19,14 @@ public class AssetResponse {
     private String symbol;
     private BigDecimal quantity;
     private BigDecimal buyingRate;
-    private LocalDate purchaseDate;
+    private Instant purchaseDateTime;
     private String currency;
     private BigDecimal currentPrice;
     private BigDecimal profitLoss;
     private BigDecimal profitLossPercent;
+    private BigDecimal sellingRate;
+    private Instant sellingDateTime;
+    private boolean sold;
     private Instant createdAt;
     private Instant updatedAt;
 }

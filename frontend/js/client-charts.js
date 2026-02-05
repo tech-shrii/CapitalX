@@ -108,9 +108,9 @@
         if (Object.keys(portfolio).length === 0) return;
         const msgEl = document.getElementById('combinedChartMessage');
         try {
-            const interval = PERIOD_TO_INTERVAL[currentPeriod] || '1d';
+            // Use backend endpoint that fetches from database (MANUAL source only)
             const data = await apiCall(
-                `/pricing/portfolio/chart?period=${currentPeriod}&interval=${interval}`,
+                `/clients/${clientId}/portfolio/chart?period=${currentPeriod}`,
                 'POST',
                 portfolio
             );

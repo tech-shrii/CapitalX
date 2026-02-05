@@ -7,7 +7,10 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
-@Table(name = "asset_prices")
+@Table(name = "asset_prices", indexes = {
+    @Index(name = "idx_asset_prices_symbol", columnList = "symbol"),
+    @Index(name = "idx_asset_prices_symbol_date", columnList = "symbol,price_date")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -20,8 +23,11 @@ public class AssetPrice {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "asset_id", nullable = false)
+    @JoinColumn(name = "asset_id", nullable = true)
     private Asset asset;
+
+    @Column(nullable = false, length = 50)
+    private String symbol;
 
     @Column(name = "current_price", nullable = false, precision = 20, scale = 4)
     private BigDecimal currentPrice;

@@ -20,10 +20,13 @@ public class AssetMapper {
         existing.setSymbol(request.getSymbol() != null ? request.getSymbol() : deriveSymbol(request.getCategory(), request.getName()));
         existing.setQuantity(request.getQuantity());
         existing.setBuyingRate(request.getBuyingRate());
-        existing.setPurchaseDate(request.getPurchaseDate());
+        existing.setPurchaseDateTime(request.getPurchaseDateTime());
         if (request.getCurrency() != null) {
             existing.setCurrency(request.getCurrency());
         }
+        existing.setSellingRate(request.getSellingRate());
+        existing.setSellingDateTime(request.getSellingDateTime());
+        existing.setSold(request.isSold());
         return existing;
     }
 
@@ -36,11 +39,14 @@ public class AssetMapper {
                 .symbol(entity.getSymbol())
                 .quantity(entity.getQuantity())
                 .buyingRate(entity.getBuyingRate())
-                .purchaseDate(entity.getPurchaseDate())
+                .purchaseDateTime(entity.getPurchaseDateTime())
                 .currency(entity.getCurrency())
                 .currentPrice(currentPrice)
                 .profitLoss(profitLoss)
                 .profitLossPercent(profitLossPercent)
+                .sellingRate(entity.getSellingRate())
+                .sellingDateTime(entity.getSellingDateTime())
+                .sold(entity.isSold())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();

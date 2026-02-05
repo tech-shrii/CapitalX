@@ -8,7 +8,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
+import java.time.Instant;
 
 @Data
 public class AssetRequest {
@@ -32,8 +32,14 @@ public class AssetRequest {
     private BigDecimal buyingRate;
 
     @NotNull(message = "Purchase date is required")
-    private LocalDate purchaseDate;
+    private Instant purchaseDateTime;
 
     @Size(max = 3)
     private String currency;
+
+    private BigDecimal sellingRate;
+
+    private Instant sellingDateTime;
+
+    private boolean sold;
 }

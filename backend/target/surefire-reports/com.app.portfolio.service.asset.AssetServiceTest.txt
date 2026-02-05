@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.app.portfolio.service.asset.AssetServiceTest
+-------------------------------------------------------------------------------
+Tests run: 0, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 4.990 s -- in com.app.portfolio.service.asset.AssetServiceTest

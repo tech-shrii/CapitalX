@@ -1,6 +1,5 @@
 let pieChart = null;
 let lineChart = null;
-let barChart = null;
 let refreshIntervalId = null;
 let isModalOpen = false;
 
@@ -95,7 +94,6 @@ function refreshData() {
 function destroyCharts() {
     if (pieChart) { pieChart.destroy(); pieChart = null; }
     if (lineChart) { lineChart.destroy(); lineChart = null; }
-    if (barChart) { barChart.destroy(); barChart = null; }
 }
 
 function setupUser() {
@@ -170,6 +168,23 @@ async function loadDashboardData() {
         document.getElementById('totalPortfolioValue').textContent = formatCurrency(data.totalCurrentValue || 0, defaultCurrency);
         document.getElementById('totalReturns').textContent = formatCurrency(data.totalProfitLoss || 0, defaultCurrency);
         document.getElementById('totalInvestment').textContent = formatCurrency(data.totalInvested || 0, defaultCurrency);
+        document.getElementById('assetCategoryCount').textContent = data.assetCategoryCount || 0;
+
+        const todaysPLValue = data.todaysPL || 0;
+        const todaysPL = document.getElementById('todaysPL');
+        if (todaysPL) {
+            todaysPL.textContent = formatCurrency(todaysPLValue, defaultCurrency);
+            todaysPL.classList.toggle('positive', todaysPLValue >= 0);
+            todaysPL.classList.toggle('negative', todaysPLValue < 0);
+        }
+        
+        const todaysPLPercentageValue = data.todaysPLPercentage || 0;
+        const todaysPLPercentage = document.getElementById('todaysPLPercentage');
+        if (todaysPLPercentage) {
+            todaysPLPercentage.textContent = formatPercent(todaysPLPercentageValue);
+            todaysPLPercentage.classList.toggle('positive', todaysPLPercentageValue >= 0);
+            todaysPLPercentage.classList.toggle('negative', todaysPLPercentageValue < 0);
+        }
         
         const pnl = data.totalProfitLoss || 0;
         const pnlPercent = data.totalProfitLossPercent || 0;
@@ -181,7 +196,6 @@ async function loadDashboardData() {
         // Update charts
         updatePieChart(data.assetAllocation);
         updateLineChart(data.portfolioPerformance);
-        updateBarChart(data.assetCategoryBreakdown);
 
         // Update Top Performing Assets Table
         const topAssetsTable = document.getElementById('topAssetsTable');
@@ -193,6 +207,26 @@ async function loadDashboardData() {
                         <tr>
                             <td>${asset.name || 'N/A'}</td>
                             <td><span class="badge badge-blue">${asset.category || 'N/A'}</span></td>
+                            <td class="right">${formatCurrency(asset.currentValue || 0, asset.currency || defaultCurrency)}</td>
+                            <td class="right ${(asset.returns || 0) >= 0 ? 'positive' : 'negative'}">${formatPercent(asset.returns || 0)}</td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No assets found</td></tr>';
+                }
+            }
+        }
+        
+        // Update Worst Performing Assets Table
+        const worstAssetsTable = document.getElementById('worstAssetsTable');
+        if (worstAssetsTable) {
+            const tbody = worstAssetsTable.getElementsByTagName('tbody')[0];
+            if (tbody) {
+                if (data.worstAssets && data.worstAssets.length > 0) {
+                    tbody.innerHTML = data.worstAssets.map(asset => `
+                        <tr>
+                            <td>${asset.name || 'N/A'}</td>
+                            <td><span class="badge badge-red">${asset.category || 'N/A'}</span></td>
                             <td class="right">${formatCurrency(asset.currentValue || 0, asset.currency || defaultCurrency)}</td>
                             <td class="right ${(asset.returns || 0) >= 0 ? 'positive' : 'negative'}">${formatPercent(asset.returns || 0)}</td>
                         </tr>
@@ -259,39 +293,16 @@ function updateLineChart(portfolioPerformance) {
                     tension: .4,
                     fill: false
                 }]
+            },
+            options: {
+                aspectRatio: 1 // Ensure the chart maintains a square aspect ratio
             }
         });
         console.log('[DEBUG] Line chart created');
     }
 }
 
-function updateBarChart(assetCategoryBreakdown) {
-    const barCtx = document.getElementById('bar');
-    if (!barCtx) return;
 
-    const labels = Object.keys(assetCategoryBreakdown || {});
-    const data = Object.values(assetCategoryBreakdown || {}).map(v => Number(v));
-
-    if (barChart) {
-        barChart.data.labels = labels;
-        barChart.data.datasets[0].data = data;
-        barChart.update();
-        console.log('[DEBUG] Bar chart updated');
-    } else {
-        barChart = new Chart(barCtx.getContext('2d'), {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Value',
-                    data: data,
-                    backgroundColor: '#3b82f6'
-                }]
-            }
-        });
-        console.log('[DEBUG] Bar chart created');
-    }
-}
 
 function setupClientManagement() {
     loadClients();
@@ -888,6 +899,7 @@ async function loadAssetCategoryTab(category) {
                     <tr><td colspan="8" style="text-align:center;">Loading...</td></tr>
                 </tbody>
             </table>
+            <div id="pagination-controls" style="display: flex; justify-content: center; margin-top: 20px;"></div>
         </div>
     `;
 
@@ -920,67 +932,90 @@ async function loadAssetCategoryTab(category) {
         const assets = await apiCall(url);
         const filteredAssets = assets.filter(asset => asset.category.toLowerCase() === category.toLowerCase());
         
+        // Pagination variables
+        const pageSize = 5;
+        let currentPage = 0;
+        const totalPages = Math.ceil(filteredAssets.length / pageSize);
+        
         const assetTableBody = document.getElementById('asset-table-body');
-        if (filteredAssets.length === 0) {
-            assetTableBody.innerHTML = `<tr><td colspan="8" style="text-align:center;">No assets in this category.</td></tr>`;
-            return;
+        const paginationControls = document.getElementById('pagination-controls');
+        
+        function renderPage(page) {
+            currentPage = page;
+            const start = currentPage * pageSize;
+            const end = start + pageSize;
+            const pageAssets = filteredAssets.slice(start, end);
+            
+            if (pageAssets.length === 0) {
+                assetTableBody.innerHTML = `<tr><td colspan="8" style="text-align:center;">No assets in this category.</td></tr>`;
+                paginationControls.innerHTML = '';
+                return;
+            }
+
+            assetTableBody.innerHTML = pageAssets.map(asset => {
+                const currency = asset.currency || 'USD';
+                return `
+                <tr data-asset-id="${asset.id}">
+                    <td>${asset.name}</td>
+                    <td>${asset.symbol}</td>
+                    <td>${asset.quantity}</td>
+                    <td>${formatCurrency(asset.buyingRate, currency)}</td>
+                    <td>${formatCurrency(asset.currentPrice, currency)}</td>
+                    <td class="${asset.profitLoss >= 0 ? 'positive' : 'negative'}">${formatCurrency(asset.profitLoss, currency)}</td>
+                    <td class="${asset.profitLossPercent >= 0 ? 'positive' : 'negative'}">${formatPercent(asset.profitLossPercent)}</td>
+                    <td>
+                        <button class="btn btn-secondary btn-sm edit-asset-btn">Edit</button>
+                        <button class="btn btn-danger btn-sm delete-asset-btn">Delete</button>
+                    </td>
+                </tr>
+            `;
+            }).join('');
+
+            // Render pagination controls
+            let controlsHTML = '';
+            if (totalPages > 1) {
+                controlsHTML += `<button class="btn btn-secondary" id="prev-page" ${currentPage === 0 ? 'disabled' : ''}>Previous</button>`;
+                for (let i = 0; i < totalPages; i++) {
+                    controlsHTML += `<button class="btn ${i === currentPage ? 'btn-primary' : 'btn-secondary'}" data-page="${i}">${i + 1}</button>`;
+                }
+                controlsHTML += `<button class="btn btn-secondary" id="next-page" ${currentPage === totalPages - 1 ? 'disabled' : ''}>Next</button>`;
+            }
+            paginationControls.innerHTML = controlsHTML;
+
+            // Add event listeners for pagination
+            document.getElementById('prev-page')?.addEventListener('click', () => renderPage(currentPage - 1));
+            document.getElementById('next-page')?.addEventListener('click', () => renderPage(currentPage + 1));
+            document.querySelectorAll('[data-page]').forEach(btn => {
+                btn.addEventListener('click', (e) => renderPage(parseInt(e.target.dataset.page)));
+            });
+
+            // Add event listeners for edit and delete buttons
+            const editButtons = document.querySelectorAll('.edit-asset-btn');
+            editButtons.forEach((btn) => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const assetId = e.target.closest('tr')?.dataset.assetId;
+                    if (assetId) {
+                        editAsset(assetId);
+                    }
+                });
+            });
+
+            const deleteButtons = document.querySelectorAll('.delete-asset-btn');
+            deleteButtons.forEach((btn) => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const assetId = e.target.closest('tr')?.dataset.assetId;
+                    if (assetId) {
+                        deleteAsset(assetId);
+                    }
+                });
+            });
         }
-
-        assetTableBody.innerHTML = filteredAssets.map(asset => {
-            const currency = asset.currency || 'USD';
-            return `
-            <tr data-asset-id="${asset.id}">
-                <td>${asset.name}</td>
-                <td>${asset.symbol}</td>
-                <td>${asset.quantity}</td>
-                <td>${formatCurrency(asset.buyingRate, currency)}</td>
-                <td>${formatCurrency(asset.currentPrice, currency)}</td>
-                <td class="${asset.profitLoss >= 0 ? 'positive' : 'negative'}">${formatCurrency(asset.profitLoss, currency)}</td>
-                <td class="${asset.profitLossPercent >= 0 ? 'positive' : 'negative'}">${formatPercent(asset.profitLossPercent)}</td>
-                <td>
-                    <button class="btn btn-secondary btn-sm edit-asset-btn">Edit</button>
-                    <button class="btn btn-danger btn-sm delete-asset-btn">Delete</button>
-                </td>
-            </tr>
-        `;
-        }).join('');
-
-        // Add event listeners for edit and delete buttons
-        const editButtons = document.querySelectorAll('.edit-asset-btn');
-        console.log('[DEBUG] Found', editButtons.length, 'edit buttons');
-        editButtons.forEach((btn, index) => {
-            console.log('[DEBUG] Attaching listener to edit button', index);
-            btn.addEventListener('click', (e) => {
-                console.log('[DEBUG] Edit button clicked!', e);
-                e.preventDefault();
-                e.stopPropagation();
-                const assetId = e.target.closest('tr')?.dataset.assetId;
-                console.log('[DEBUG] Asset ID from row:', assetId);
-                if (assetId) {
-                    editAsset(assetId);
-                } else {
-                    console.error('[ERROR] Could not find assetId from row');
-                }
-            });
-        });
-
-        const deleteButtons = document.querySelectorAll('.delete-asset-btn');
-        console.log('[DEBUG] Found', deleteButtons.length, 'delete buttons');
-        deleteButtons.forEach((btn, index) => {
-            console.log('[DEBUG] Attaching listener to delete button', index);
-            btn.addEventListener('click', (e) => {
-                console.log('[DEBUG] Delete button clicked!', e);
-                e.preventDefault();
-                e.stopPropagation();
-                const assetId = e.target.closest('tr')?.dataset.assetId;
-                console.log('[DEBUG] Asset ID from row:', assetId);
-                if (assetId) {
-                    deleteAsset(assetId);
-                } else {
-                    console.error('[ERROR] Could not find assetId from row');
-                }
-            });
-        });
+        
+        renderPage(0);
 
     } catch (error) {
         console.error(`Error loading assets for ${category}:`, error);

@@ -19,9 +19,9 @@
   </div>
 
   <div class="card">
-    <div class="kpi-title">Best Performer</div>
-    <div class="kpi-value" id="bestPerformer">--</div>
-    <div class="positive" id="bestPerformerReturn"></div>
+    <div class="kpi-title">Today's P/L</div>
+    <div class="kpi-value" id="todaysPL">$0</div>
+    <div class="positive" id="todaysPLPercentage"></div>
   </div>
 </div>
 
@@ -42,24 +42,34 @@
 
 <!-- TOP ASSETS -->
 <div class="card">
-<h3>Top Performing Assets</h3>
-<br>
-<table id="topAssetsTable">
-<thead>
-<tr>
-<th>Asset Name</th><th>Type</th><th class="right">Current Value</th><th class="right">Returns</th>
-</tr>
-</thead>
-<tbody>
-<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>
-</tbody>
-</table>
+  <h3>Top Performing Assets</h3>
+  <table id="topAssetsTable">
+    <thead>
+    <tr>
+      <th>Asset Name</th><th>Type</th><th class="right">Current Value</th><th class="right">Returns</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr><td colspan="4" style="text-align:center;">Loading...</td></tr>
+    </tbody>
+  </table>
 </div>
 
 <br>
 
-<!-- CATEGORY BAR -->
+<!-- WORST ASSETS -->
 <div class="card">
-<h3>Asset Category Breakdown</h3>
-<canvas id="bar"></canvas>
+  <h3>Worst Performing Assets</h3>
+  <table id="worstAssetsTable">
+    <thead>
+    <tr>
+      <th>Asset Name</th><th>Type</th><th class="right">Current Value</th><th class="right">Returns</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr><td colspan="4" style="text-align:center;">Loading...</td></tr>
+    </tbody>
+  </table>
 </div>
+
+

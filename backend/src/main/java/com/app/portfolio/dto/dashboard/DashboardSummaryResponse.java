@@ -19,11 +19,15 @@ public class DashboardSummaryResponse {
     private BigDecimal totalProfitLoss;
     private BigDecimal totalProfitLossPercent;
     private List<ClientSummaryDto> recentClients;
+    private Integer assetCategoryCount;
+    private BigDecimal todaysPL;
+    private BigDecimal todaysPLPercentage;
     
     // Additional fields for frontend charts
     private Map<String, BigDecimal> assetAllocation; // Category -> Value
     private PortfolioPerformanceData portfolioPerformance; // Historical data
     private List<TopAssetDto> topAssets; // Top performing assets
+    private List<TopAssetDto> worstAssets; // Worst performing assets
     private Map<String, BigDecimal> assetCategoryBreakdown; // Category -> Value
 
     @Data

@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@Builder // for easy object creation
 public class AnnualPerformance {
 
     @Id

@@ -77,16 +77,17 @@ public class PricingController {
     }
 
     /**
-     * Get combined historical chart for portfolio
+     * Get combined historical chart for portfolio from database (MANUAL source)
      * Expects: {"AAPL": 10, "MSFT": 5}
+     * Now uses database data instead of external pricing service
      */
     @PostMapping("/portfolio/chart")
     public ResponseEntity<PortfolioChartResponse> getPortfolioChart(
             @RequestBody Map<String, Double> portfolio,
-            @RequestParam(defaultValue = "1mo") String period,
-            @RequestParam(defaultValue = "1d") String interval) {
-        log.debug("Fetching portfolio chart with period: {} and interval: {}", period, interval);
-        PortfolioChartResponse response = pricingService.getPortfolioChart(portfolio, period, interval);
+            @RequestParam(defaultValue = "6mo") String period,
+            @RequestParam(defaultValue = "1wk") String interval) {
+        log.debug("Fetching portfolio chart from database with period: {} and interval: {}", period, interval);
+        PortfolioChartResponse response = pricingService.getPortfolioChartFromDatabase(portfolio, period, interval);
         return ResponseEntity.ok(response);
     }
 }

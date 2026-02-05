@@ -243,16 +243,43 @@ td { padding: 1rem 0; border-top: 1px solid var(--border-color); font-size: 14px
     .grid2 { grid-template-columns: 1fr; }
     .main-content { padding: 1rem; }
     .form-grid { grid-template-columns: 1fr; }
+    /* Landing: header */
+    .landing-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+        padding: 1rem 0;
+    }
+    .landing-logo { font-size: 20px; }
+    .landing-nav-links { flex-wrap: wrap; justify-content: center; }
+    /* Landing: hero */
+    .hero { padding: 4rem 0; }
+    .hero-title { font-size: 36px; margin-bottom: 1rem; }
+    .hero-subtitle { font-size: 16px; margin-bottom: 2rem; }
+    .hero-actions { flex-wrap: wrap; justify-content: center; }
+    /* Landing: features */
+    .features { padding: 3rem 0; }
+    .section-header { margin-bottom: 3rem; }
+    .section-title { font-size: 32px; }
+    .section-subtitle { font-size: 16px; }
+    /* Landing: CTA */
+    .cta-section { padding: 4rem 0; }
 }
 
 @media (max-width: 480px) {
-
-     .grid4 {
-
-        grid-template-columns: 1fr;
-
-    }
-
+    .grid4 { grid-template-columns: 1fr; }
+    /* Landing: hero small mobile */
+    .hero { padding: 3rem 0; }
+    .hero-title { font-size: 28px; }
+    .hero-subtitle { font-size: 14px; margin-bottom: 1.5rem; }
+    .hero-actions .btn { width: 100%; }
+    /* Landing: features single column */
+    .features-grid { grid-template-columns: 1fr; gap: 1.5rem; }
+    .section-title { font-size: 26px; }
+    .section-subtitle { font-size: 14px; }
+    /* Landing: CTA */
+    .cta-section { padding: 3rem 0; }
+    .landing-logo { font-size: 18px; }
 }
 
 

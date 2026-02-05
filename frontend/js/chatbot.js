@@ -22,19 +22,15 @@ function initializeChatbot() {
         return;
     }
 
-    // Track if greeting has been loaded
-    let greetingLoaded = false;
+    // Load greeting immediately when widget is open on page load
+    if (typeof loadGreeting === 'function') {
+        loadGreeting();
+    }
 
     // Open chatbot when bubble button is clicked
     chatbotToggle.addEventListener('click', (e) => {
         e.stopPropagation();
         chatbotWidget.classList.remove('collapsed');
-        
-        // Load greeting on first open
-        if (!greetingLoaded) {
-            loadGreeting();
-            greetingLoaded = true;
-        }
     });
 
     // Close chatbot when close button is clicked

@@ -69,7 +69,35 @@ document.addEventListener('DOMContentLoaded', () => {
             window.location.href = '../index.html';
         });
     }
+
+    setupBurgerMenu();
 });
+
+function setupBurgerMenu() {
+    const burger = document.getElementById('navBurger');
+    const mainNav = document.getElementById('mainNav');
+    if (!burger || !mainNav) return;
+
+    burger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        mainNav.classList.toggle('nav--open');
+        burger.classList.toggle('is-open');
+    });
+
+    mainNav.querySelectorAll('a').forEach(link => {
+        link.addEventListener('click', () => {
+            mainNav.classList.remove('nav--open');
+            burger.classList.remove('is-open');
+        });
+    });
+
+    document.addEventListener('click', (e) => {
+        if (mainNav.classList.contains('nav--open') && !mainNav.contains(e.target) && !burger.contains(e.target)) {
+            mainNav.classList.remove('nav--open');
+            burger.classList.remove('is-open');
+        }
+    });
+}
 
 let currentClientId = 'main'; // 'main' for the user's own portfolio
 
@@ -282,6 +310,11 @@ function updatePieChart(assetAllocation) {
                     data: data,
                     backgroundColor: ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444', '#64748b'],
                 }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 1.3
             }
         });
         console.log('[DEBUG] Pie chart created');
@@ -318,7 +351,9 @@ function updateLineChart(portfolioPerformance) {
                 }]
             },
             options: {
-                aspectRatio: 1 // Ensure the chart maintains a square aspect ratio
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 2
             }
         });
         console.log('[DEBUG] Line chart created');
@@ -912,6 +947,7 @@ async function loadAssetCategoryTab(category) {
                 <h2>${category.replace('_', ' ').toUpperCase()}</h2>
                 <button id="addAssetBtn" class="btn btn-primary">+ Add Asset</button>
             </div>
+            <div class="table-wrapper">
             <table class="assets-table">
                 <thead>
                     <tr>
@@ -929,6 +965,7 @@ async function loadAssetCategoryTab(category) {
                     <tr><td colspan="8" style="text-align:center;">Loading...</td></tr>
                 </tbody>
             </table>
+            </div>
             <div id="pagination-controls" style="display: flex; justify-content: center; margin-top: 20px; gap: 5px;"></div>
         </div>
     `;

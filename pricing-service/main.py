@@ -1,5 +1,5 @@
 # ================================
-# main-new3.py
+# main.py
 # ================================
 
 import csv
@@ -22,7 +22,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(levelname)s:%(name)s:%(message)s"
 )
-logger = logging.getLogger("main-new3")
+logger = logging.getLogger("main")
 
 # ------------------------
 # App
@@ -181,33 +181,61 @@ def fetch_stooq(symbol):
 
 def fetch_yahoo(symbol):
     sym = yahoo_symbol(symbol)
-    data = yf.download(sym, period="2d", progress=False)
-
-    if data.empty:
-        raise ValueError("No Yahoo data")
-
-    return float(data["Close"].iloc[-1])
+    try:
+        data = yf.download(sym, period="2d", progress=False, threads=True)
+        
+        if data.empty:
+            raise ValueError(f"No Yahoo data for {sym}")
+        
+        # Handle multi-index DataFrame (when downloading multiple symbols)
+        if isinstance(data.columns, pd.MultiIndex):
+            # If multiple symbols, take the first one
+            close_col = data["Close"]
+            if isinstance(close_col, pd.DataFrame):
+                close_col = close_col.iloc[:, 0]
+            close_value = close_col.iloc[-1]
+        else:
+            close_value = data["Close"].iloc[-1]
+        
+        # Handle Series vs scalar
+        if isinstance(close_value, pd.Series):
+            close_value = close_value.iloc[-1]
+        
+        price = float(close_value)
+        return price
+    except Exception as e:
+        logger.warning(f"[yfinance] Error fetching {sym}: {e}")
+        raise
 
 # ------------------------
 # Unified fetch
 # ------------------------
 
 def fetch_price(symbol):
+    # Try Stooq first (all methods: CSV, HTML, Historical)
+    stooq_success = False
     try:
         price = fetch_stooq(symbol)
         logger.info(f"[Stooq] {symbol}: {price}")
         return price
-    except Exception:
-        pass
+    except ValueError as e:
+        # ValueError from fetch_stooq means all Stooq methods failed
+        logger.info(f"[Stooq] {symbol}: All Stooq methods failed, trying yfinance...")
+    except Exception as e:
+        # Other exceptions from Stooq
+        logger.warning(f"[Stooq] {symbol} unexpected error: {e}, trying yfinance...")
 
+    # Fallback to yfinance when Stooq fails
     try:
+        logger.debug(f"[yfinance] Attempting to fetch {symbol} via yfinance...")
         price = fetch_yahoo(symbol)
         logger.info(f"[yfinance] {symbol}: {price}")
         return price
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"[yfinance] {symbol} failed: {e}")
 
-    raise ValueError("All sources failed")
+    # Both Stooq and yfinance failed
+    raise ValueError(f"All sources failed for {symbol}")
 
 # ------------------------
 # Unified OPEN price fetch
@@ -240,14 +268,31 @@ def fetch_open_price(symbol):
     # Fallback → Yahoo
     try:
         sym_y = yahoo_symbol(symbol)
-        df = yf.download(sym_y, period="2d", progress=False)
+        df = yf.download(sym_y, period="2d", progress=False, threads=True)
 
-        if not df.empty:
-            open_price = float(df["Open"].iloc[-1])
-            logger.info(f"[yfinance-OPEN] {symbol}: {open_price}")
-            return open_price
+        if df.empty:
+            raise ValueError(f"No Yahoo data for {sym_y}")
+        
+        # Handle multi-index DataFrame (when downloading multiple symbols)
+        if isinstance(df.columns, pd.MultiIndex):
+            # If multiple symbols, take the first one
+            open_col = df["Open"]
+            if isinstance(open_col, pd.DataFrame):
+                open_col = open_col.iloc[:, 0]
+            open_value = open_col.iloc[-1]
+        else:
+            open_value = df["Open"].iloc[-1]
+        
+        # Handle Series vs scalar
+        if isinstance(open_value, pd.Series):
+            open_value = open_value.iloc[-1]
+        
+        open_price = float(open_value)
+        logger.info(f"[yfinance-OPEN] {symbol}: {open_price}")
+        return open_price
     except Exception as e:
         logger.warning(f"[yfinance-OPEN] {symbol} failed: {e}")
+        raise
 
     raise ValueError("All OPEN sources failed")
 

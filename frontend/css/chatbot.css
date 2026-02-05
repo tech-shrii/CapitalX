@@ -333,11 +333,26 @@
     margin: 8px 0;
 }
 
-/* Mobile Responsive */
-@media (max-width: 768px) {
+/* Tablet: ensure chatbot doesn't overlap content */
+@media (max-width: 1024px) {
     .chatbot-widget {
         bottom: 20px;
         right: 20px;
+    }
+    .chatbot-panel {
+        width: 360px;
+        max-height: min(600px, calc(100vh - 80px));
+    }
+    .chatbot-body {
+        height: min(500px, calc(100vh - 140px));
+    }
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .chatbot-widget {
+        bottom: 16px;
+        right: 16px;
     }
 
     .chatbot-bubble-btn {
@@ -346,14 +361,54 @@
     }
 
     .chatbot-panel {
-        width: calc(100vw - 40px);
-        max-height: calc(100vh - 100px);
-        right: 0;
-        bottom: 0;
+        width: calc(100vw - 32px);
+        max-width: 400px;
+        max-height: calc(100vh - 80px);
+        right: 16px;
+        bottom: 16px;
+        left: auto;
         border-radius: 14px 14px 0 0;
     }
 
     .chatbot-body {
-        height: calc(100vh - 200px);
+        height: calc(100vh - 180px);
+    }
+}
+
+/* Small mobile: minimal overlap, full-width panel */
+@media (max-width: 480px) {
+    .chatbot-widget {
+        bottom: 12px;
+        right: 12px;
+    }
+
+    .chatbot-bubble-btn {
+        width: 48px;
+        height: 48px;
+    }
+
+    .chatbot-panel {
+        width: calc(100vw - 24px);
+        max-width: none;
+        right: 12px;
+        left: 12px;
+        bottom: 12px;
+        max-height: calc(100vh - 60px);
+    }
+
+    .chatbot-body {
+        height: calc(100vh - 160px);
+    }
+
+    .chatbot-header {
+        padding: 12px 16px;
+    }
+
+    .chatbot-header h3 {
+        font-size: 14px;
+    }
+
+    .chatbot-messages {
+        padding: 12px 16px;
     }
 }

@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>Dashboard - CapitalX</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
 
 <!-- Google Font -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -20,11 +21,33 @@
 
 <!-- HEADER -->
 <div class="header">
-  <div>
-    <div class="title">CapitalX</div>
+  <div class="header-left">
+    <button type="button" id="navBurger" class="burger-btn" aria-label="Toggle menu">
+      <span class="burger-line"></span>
+      <span class="burger-line"></span>
+      <span class="burger-line"></span>
+    </button>
+    <div>
+      <div class="title">CapitalX</div>
+    </div>
   </div>
-  <div class="header-actions">
-    <!-- <button id="addClientBtnHeader" class="btn btn-primary">+ Add Client</button> -->
+</div>
+
+<!-- NAV: links + client switcher & logout (in burger on mobile) -->
+<nav class="nav" id="mainNav" aria-label="Main">
+  <div class="nav-links-wrap">
+    <a href="#" class="active" data-tab="dashboard">Dashboard</a>
+    <a href="#" data-tab="stock">Stock</a>
+    <a href="#" data-tab="mutual_fund">Mutual Fund</a>
+    <a href="#" data-tab="bond">Bond</a>
+    <a href="#" data-tab="crypto">Crypto</a>
+    <a href="#" data-tab="commodity">Commodity</a>
+    <a href="#" data-tab="forex">Forex</a>
+    <a href="#" data-tab="news">News</a>
+    <a href="#" data-tab="statement">Statement</a>
+    <a href="#" data-tab="setting">Setting</a>
+  </div>
+  <div class="nav-actions">
     <div class="user-select">
       Client:
       <select id="clientSwitcher">
@@ -33,21 +56,7 @@
     </div>
     <button id="logoutBtnHeader" class="btn btn-danger">Logout</button>
   </div>
-</div>
-
-<!-- NAV -->
-<div class="nav">
-  <a href="#" class="active" data-tab="dashboard">Dashboard</a>
-  <a href="#" data-tab="stock">Stock</a>
-  <a href="#" data-tab="mutual_fund">Mutual Fund</a>
-  <a href="#" data-tab="bond">Bond</a>
-  <a href="#" data-tab="crypto">Crypto</a>
-  <a href="#" data-tab="commodity">Commodity</a>
-  <a href="#" data-tab="forex">Forex</a>
-  <a href="#" data-tab="news">News</a>
-  <a href="#" data-tab="statement">Statement</a>
-  <a href="#" data-tab="setting">Setting</a>
-</div>
+</nav>
 
 <div id="tab-content">
     <!-- Dashboard content will be loaded here -->
@@ -126,7 +135,7 @@
 </div>
 
 <!-- Chatbot Widget -->
-<div id="chatbotWidget" class="chatbot-widget collapsed">
+<div id="chatbotWidget" class="chatbot-widget">
     <!-- Chat Bubble Button (shown when collapsed) -->
     <button id="chatbotToggle" class="chatbot-bubble-btn">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -138,7 +147,7 @@
     <!-- Chatbot Panel (shown when expanded) -->
     <div id="chatbotPanel" class="chatbot-panel">
         <div class="chatbot-header">
-            <h3>Investment Expert</h3>
+            <h3>CaptialXpert</h3>
             <button id="chatbotClose" class="chatbot-close">×</button>
         </div>
         <div id="chatbotBody" class="chatbot-body">

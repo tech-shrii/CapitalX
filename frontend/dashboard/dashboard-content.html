@@ -30,12 +30,12 @@
 
 <div class="card">
 <h3>Asset Allocation</h3>
-<canvas id="pie"></canvas>
+<div class="chart-container chart-container--pie"><canvas id="pie"></canvas></div>
 </div>
 
 <div class="card">
 <h3>Portfolio Performance (6 Months)</h3>
-<canvas id="line"></canvas>
+<div class="chart-container chart-container--line"><canvas id="line"></canvas></div>
 </div>
 
 </div>
@@ -43,6 +43,7 @@
 <!-- TOP ASSETS -->
 <div class="card">
   <h3>Top Performing Assets</h3>
+  <div class="table-wrapper">
   <table id="topAssetsTable">
     <thead>
     <tr>
@@ -53,6 +54,7 @@
     <tr><td colspan="4" style="text-align:center;">Loading...</td></tr>
     </tbody>
   </table>
+  </div>
 </div>
 
 <br>
@@ -60,6 +62,7 @@
 <!-- WORST ASSETS -->
 <div class="card">
   <h3>Worst Performing Assets</h3>
+  <div class="table-wrapper">
   <table id="worstAssetsTable">
     <thead>
     <tr>
@@ -70,6 +73,7 @@
     <tr><td colspan="4" style="text-align:center;">Loading...</td></tr>
     </tbody>
   </table>
+  </div>
 </div>
 
 

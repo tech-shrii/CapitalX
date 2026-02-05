@@ -174,10 +174,14 @@ public class DashboardServiceImpl implements DashboardService {
                     Double::sum
                 ));
                 
-            com.app.portfolio.dto.pricing.PortfolioChartResponse todaysPerformance = pricingService.getPortfolioChart(portfolioMap, "1d", "1d");
+            // Calculate today's P&L using database data instead of external pricing service
             BigDecimal todaysPL = BigDecimal.ZERO;
             BigDecimal todaysPLPercentage = BigDecimal.ZERO;
-
+            
+            // Get today's performance from database (1d period)
+            com.app.portfolio.dto.pricing.PortfolioChartResponse todaysPerformance = 
+                pricingService.getPortfolioChartFromDatabase(portfolioMap, "1d", "15m");
+            
             if (todaysPerformance != null && todaysPerformance.getData() != null && todaysPerformance.getData().size() > 1) {
                 var startValue = todaysPerformance.getData().get(0).getValue();
                 var endValue = todaysPerformance.getData().get(todaysPerformance.getData().size() - 1).getValue();
@@ -369,9 +373,13 @@ public class DashboardServiceImpl implements DashboardService {
                     Double::sum
                 ));
             
-            com.app.portfolio.dto.pricing.PortfolioChartResponse todaysPerformance = pricingService.getPortfolioChart(portfolioMap, "1d", "1d");
+            // Calculate today's P&L using database data instead of external pricing service
             BigDecimal todaysPL = BigDecimal.ZERO;
             BigDecimal todaysPLPercentage = BigDecimal.ZERO;
+            
+            // Get today's performance from database (1d period)
+            com.app.portfolio.dto.pricing.PortfolioChartResponse todaysPerformance = 
+                pricingService.getPortfolioChartFromDatabase(portfolioMap, "1d", "15m");
             
             if (todaysPerformance != null && todaysPerformance.getData() != null && todaysPerformance.getData().size() > 1) {
                 var startValue = todaysPerformance.getData().get(0).getValue();

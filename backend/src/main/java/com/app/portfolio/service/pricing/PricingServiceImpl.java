@@ -213,7 +213,7 @@ public class PricingServiceImpl implements PricingService {
                 return;
             }
 
-            log.debug("Starting scheduled price update...");
+            log.info("🔄 Starting scheduled price update...");
             List<Asset> assets = assetRepository.findAll();
 
             if (assets.isEmpty()) {
@@ -221,20 +221,27 @@ public class PricingServiceImpl implements PricingService {
                 return;
             }
 
-            // Collect all unique symbols
+            // Filter out sold assets and collect unique symbols
             List<String> symbols = assets.stream()
+                    .filter(asset -> !asset.isSold()) // Only update prices for active (non-sold) assets
                     .map(Asset::getSymbol)
                     .filter(s -> s != null && !s.isEmpty())
                     .distinct()
                     .collect(java.util.stream.Collectors.toList());
 
             if (symbols.isEmpty()) {
+                log.debug("No active assets with symbols found to update prices for");
                 return;
             }
 
+            log.info("📊 Fetching prices for {} unique symbols: {}", symbols.size(), symbols);
+
             // Use bulk fetch for better performance
             Map<String, Object> bulkResults = bulkFetchPrices(symbols);
-            Map<String, Object> pricesData = (Map<String, Object>) bulkResults.get("data");
+            
+            // The pricing service returns a flat map: {symbol: price} or {symbol: null}
+            // Not wrapped in a "data" key
+            Map<String, Object> pricesData = bulkResults;
             
             if (pricesData == null) {
                 pricesData = new HashMap<>();
@@ -254,20 +261,29 @@ public class PricingServiceImpl implements PricingService {
                     Object priceData = pricesData.get(symbol.toUpperCase());
                     BigDecimal price = null;
 
-                    if (priceData instanceof Map) {
-                        Map<String, Object> priceMap = (Map<String, Object>) priceData;
-                        if (priceMap.containsKey("price") && !priceMap.containsKey("error")) {
-                            Object priceObj = priceMap.get("price");
-                            if (priceObj instanceof Number) {
-                                price = BigDecimal.valueOf(((Number) priceObj).doubleValue());
-                                hasSuccessfulPrices = true;
+                    // The pricing service returns prices directly as numbers (or null if failed)
+                    if (priceData instanceof Number) {
+                        price = BigDecimal.valueOf(((Number) priceData).doubleValue());
+                        hasSuccessfulPrices = true;
+                        log.debug("Got price for {} from bulk fetch: {}", symbol, price);
+                    } else if (priceData != null) {
+                        // Handle case where price might be wrapped in a map (backward compatibility)
+                        if (priceData instanceof Map) {
+                            Map<String, Object> priceMap = (Map<String, Object>) priceData;
+                            if (priceMap.containsKey("price") && !priceMap.containsKey("error")) {
+                                Object priceObj = priceMap.get("price");
+                                if (priceObj instanceof Number) {
+                                    price = BigDecimal.valueOf(((Number) priceObj).doubleValue());
+                                    hasSuccessfulPrices = true;
+                                    log.debug("Got price for {} from bulk fetch (nested): {}", symbol, price);
+                                }
                             }
                         }
                     }
 
-                    // Skip individual fetch - only bulk updates are allowed
+                    // Skip if price not found in bulk fetch
                     if (price == null) {
-                        log.debug("Price for {} not found in bulk fetch, skipping individual fallback as per policy.", symbol);
+                        log.debug("Price for {} not found in bulk fetch or was null, skipping update.", symbol);
                     }
 
                     if (price != null) {
@@ -297,7 +313,9 @@ public class PricingServiceImpl implements PricingService {
                                     .source(AssetPrice.PriceSource.YFINANCE)
                                     .build();
                             assetPriceRepository.save(assetPrice);
-                            log.debug("Updated price for {}: {}", symbol, price);
+                            log.info("✅ Updated price for {}: {} (source: YFINANCE)", symbol, price);
+                        } else {
+                            log.debug("Skipped creating duplicate price entry for {} (updated less than 1 minute ago)", symbol);
                         }
                     }
                 } catch (Exception e) {
@@ -309,10 +327,13 @@ public class PricingServiceImpl implements PricingService {
             if (hasSuccessfulPrices) {
                 consecutiveFailures.set(0);
                 serviceAvailable.set(true);
+                log.info("✅ Price update completed successfully. Updated prices for {} symbols.", 
+                        pricesData.values().stream().filter(p -> p instanceof Number).count());
+            } else {
+                log.warn("⚠️ Price update completed but no successful prices were fetched. Check pricing service availability.");
             }
 
             clearExpiredCache();
-            log.debug("Price update completed");
         } catch (Exception e) {
             log.error("Error in scheduled price update: {}", e.getMessage(), e);
             recordServiceFailure();
@@ -422,36 +443,18 @@ public class PricingServiceImpl implements PricingService {
         }
     }
 
+    /**
+     * @deprecated This method calls external pricing service. Use getPortfolioChartFromDatabase instead.
+     * Charts should now use MANUAL data from the database.
+     */
     @Override
+    @Deprecated
     public PortfolioChartResponse getPortfolioChart(Map<String, Double> portfolio,
                                                      String period, String interval) {
-        try {
-            if (!isServiceAvailable()) {
-                log.debug("Pricing service unavailable, returning null for portfolio chart");
-                return null;
-            }
-
-            String url = String.format("%s/api/portfolio/chart?period=%s&interval=%s",
-                    pricingServiceUrl, period, interval);
-            PortfolioChartResponse response = restTemplate.postForObject(url, portfolio, PortfolioChartResponse.class);
-            
-            if (response != null) {
-                consecutiveFailures.set(0);
-                serviceAvailable.set(true);
-            }
-            
-            return response;
-        } catch (ResourceAccessException e) {
-            handleConnectionError("Error fetching portfolio chart", e);
-            return null;
-        } catch (RestClientException e) {
-            log.warn("REST client error fetching portfolio chart: {}", e.getMessage());
-            recordServiceFailure();
-            return null;
-        } catch (Exception e) {
-            log.error("Unexpected error fetching portfolio chart: {}", e.getMessage());
-            return null;
-        }
+        // Redirect to database-based method instead of calling external service
+        log.warn("⚠️ getPortfolioChart() is deprecated. Redirecting to database-based method. " +
+                "External pricing service chart endpoint is no longer used.");
+        return getPortfolioChartFromDatabase(portfolio, period, interval);
     }
 
     @Override
@@ -856,17 +859,23 @@ public class PricingServiceImpl implements PricingService {
     public Map<String, Object> bulkFetchPrices(List<String> symbols) {
         try {
             if (!isServiceAvailable()) {
-                log.debug("Pricing service unavailable, returning empty map for bulk prices");
+                log.warn("⚠️ Pricing service unavailable, returning empty map for bulk prices");
                 return new HashMap<>();
             }
 
             String url = pricingServiceUrl + "/api/prices/bulk";
-            log.debug("Bulk fetching prices for {} symbols", symbols.size());
+            log.info("📡 Bulk fetching prices from {} for {} symbols: {}", url, symbols.size(), symbols);
             Map<String, Object> response = restTemplate.postForObject(url, symbols, Map.class);
             
             if (response != null && !response.isEmpty()) {
+                long successCount = response.values().stream()
+                        .filter(v -> v instanceof Number && ((Number) v).doubleValue() > 0)
+                        .count();
+                log.info("✅ Bulk fetch successful: {}/{} symbols returned valid prices", successCount, symbols.size());
                 consecutiveFailures.set(0);
                 serviceAvailable.set(true);
+            } else {
+                log.warn("⚠️ Bulk fetch returned empty or null response");
             }
             
             return response != null ? response : new HashMap<>();

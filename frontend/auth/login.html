@@ -3,44 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Portfolio Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="../css/new-style.css">
+    <title>Login - CapitalX</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/landing.css">
 </head>
-<body>
+<body class="auth-body">
     <div class="auth-container">
         <div class="auth-card">
-            <div class="auth-header">
-                <a href="../index.html" class="back-link">&larr;</a>
-                <h1 class="title">Login</h1>
+            <div id="loginSection">
+                <div class="auth-header">
+                    <h1 class="title">CapitalX</h1>
+                    <p class="subtitle">Welcome back! Please login to your account.</p>
+                </div>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="email">Email Address</label>
+                        <input type="email" id="email" name="email" required class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" name="password" required class="form-control">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Login</button>
+                </form>
+                <div class="auth-links">
+                    <p>Don't have an account? <a href="signup.html">Sign Up</a></p>
+                </div>
             </div>
-            <form id="loginForm">
-                <div class="form-group">
-                    <label for="email">Email</label>
-                    <input type="email" id="email" name="email" required>
-                </div>
-                <div class="form-group">
-                    <label for="password">Password</label>
-                    <input type="password" id="password" name="password" required>
-                </div>
-                <button type="submit" class="btn btn-primary btn-block">Login</button>
-            </form>
+
             <div id="otpSection" class="otp-section hidden">
-                <h2 class="title">Verify Email</h2>
-                <p>We've sent an OTP to your email. Please enter it below.</p>
+                <div class="auth-header">
+                    <h2 class="title" style="font-size: 24px;">Enter Verification Code</h2>
+                    <p class="subtitle">We've sent a 6-digit code to your email for security.</p>
+                </div>
                 <form id="otpForm">
                     <div class="form-group">
-                        <label for="otp">OTP</label>
-                        <input type="text" id="otp" name="otp" required maxlength="6" pattern="[0-9]{6}">
+                        <label for="otp">Verification Code (OTP)</label>
+                        <input type="text" id="otp" name="otp" required maxlength="6" pattern="[0-9]{6}" class="form-control">
                     </div>
-                    <button type="submit" class="btn btn-primary btn-block">Verify OTP</button>
+                    <button type="submit" class="btn btn-primary btn-block">Verify & Login</button>
                 </form>
             </div>
-            <div class="auth-links">
-                <a href="signup.html">Don't have an account? Sign Up</a>
-                <br>
-                <a href="../index.html">Back to Home</a>
-            </div>
+            
             <div id="message" class="message hidden"></div>
         </div>
     </div>

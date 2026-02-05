@@ -8,6 +8,7 @@
 <!-- Google Font -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../css/new-style.css">
+<link rel="stylesheet" href="../css/chatbot.css">
 
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -124,10 +125,43 @@
     </div>
 </div>
 
+<!-- Chatbot Widget -->
+<div id="chatbotWidget" class="chatbot-widget collapsed">
+    <!-- Chat Bubble Button (shown when collapsed) -->
+    <button id="chatbotToggle" class="chatbot-bubble-btn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2ZM20 16H6L4 18V4H20V16Z" fill="currentColor"/>
+            <path d="M7 9H17V11H7V9ZM7 12H15V14H7V12Z" fill="currentColor"/>
+        </svg>
+    </button>
+    
+    <!-- Chatbot Panel (shown when expanded) -->
+    <div id="chatbotPanel" class="chatbot-panel">
+        <div class="chatbot-header">
+            <h3>Investment Expert</h3>
+            <button id="chatbotClose" class="chatbot-close">×</button>
+        </div>
+        <div id="chatbotBody" class="chatbot-body">
+            <div id="chatbotMessages" class="chatbot-messages"></div>
+            <div class="chatbot-input-area">
+                <div class="quick-prompts">
+                    <button class="quick-prompt-btn" data-prompt="analyze">📊 Analyze Portfolio</button>
+                    <button class="quick-prompt-btn" data-prompt="suggestions">💡 Get Suggestions</button>
+                    <button class="quick-prompt-btn" data-prompt="risk">⚠️ Risk Assessment</button>
+                </div>
+                <div class="chatbot-input-wrapper">
+                    <input type="text" id="chatbotInput" placeholder="Ask about your portfolio..." />
+                    <button id="chatbotSend">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 </div>
 
 <script src="../js/api.js"></script>
 <script src="../js/dashboard.js"></script>
+<script src="../js/chatbot.js"></script>
 </body>
 </html>

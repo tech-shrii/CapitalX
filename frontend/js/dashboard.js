@@ -12,6 +12,11 @@ document.addEventListener('DOMContentLoaded', () => {
     loadClientsForSwitcher();
     setupClientSwitcher();
     
+    // Initialize chatbot after authentication
+    if (typeof initializeChatbot === 'function') {
+        initializeChatbot();
+    }
+    
     // Start auto-refresh only if no modal is open
     refreshIntervalId = setInterval(() => {
         if (!isModalOpen) {

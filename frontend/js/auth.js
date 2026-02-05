@@ -40,7 +40,7 @@ async function handleSignup(e) {
     try {
         await apiCall('/auth/signup', 'POST', formData);
         currentEmail = formData.email;
-        document.getElementById('signupForm').classList.add('hidden');
+        document.getElementById('signupSection').classList.add('hidden');
         document.getElementById('otpSection').classList.remove('hidden');
         showMessage('OTP sent to your email', 'success');
     } catch (error) {
@@ -58,7 +58,7 @@ async function handleLogin(e) {
     try {
         await apiCall('/auth/login', 'POST', formData);
         currentEmail = formData.email;
-        document.getElementById('loginForm').classList.add('hidden');
+        document.getElementById('loginSection').classList.add('hidden');
         document.getElementById('otpSection').classList.remove('hidden');
         showMessage('OTP sent to your email', 'success');
     } catch (error) {

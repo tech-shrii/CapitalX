@@ -1,2 +1,0 @@
-@backend/ Investigate and Search the Current Price is being determined for when sold is true, modify to always to pull it from the
-  AssetPrice Table and not consider the selling price as the current price

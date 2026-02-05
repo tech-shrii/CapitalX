@@ -6,19 +6,7 @@
     <title>Setup Your Account - Portfolio Manager</title>
     <link rel="stylesheet" href="../css/main.css">
     <link rel="stylesheet" href="../css/dashboard.css">
-    <style>
-        .stepper { display: flex; justify-content: space-around; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid #eee; }
-        .step { text-align: center; color: #aaa; }
-        .step.active { color: #3b82f6; font-weight: bold; }
-        .step .step-number { display: inline-block; width: 30px; height: 30px; line-height: 30px; border-radius: 50%; background-color: #eee; color: #aaa; margin-bottom: 0.5rem; }
-        .step.active .step-number { background-color: #3b82f6; color: white; }
-        .hidden { display: none; }
-        .main-content { max-width: 800px; margin: 40px auto; padding: 20px; }
-        .top-bar { background: none; box-shadow: none; padding: 0; }
-        .top-bar h1 { text-align: center; font-size: 2rem; margin-bottom: 2rem; }
-        .section { background: #fff; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .form-actions { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 2rem; }
-    </style>
+    <link rel="stylesheet" href="../css/import-data.css">
 </head>
 <body>
     <main class="main-content">
@@ -60,7 +48,7 @@
                 </div>
                 <div class="form-group">
                     <label>Default Currency</label>
-                    <select id="clientCurrency" class="form-control">
+                    <select id="clientCurrency">
                         <option value="USD">USD</option>
                         <option value="EUR">EUR</option>
                         <option value="GBP">GBP</option>
@@ -82,11 +70,19 @@
         <div id="step-2" class="section hidden">
             <h2>Import Data for <span id="csvClientName"></span></h2>
             <p>Upload a CSV file with your asset data. You can also skip this step and add assets manually later.</p>
+            
             <div class="form-group">
-                <label>CSV File</label>
-                <input type="file" id="csvFile" accept=".csv">
+                <label for="csvFile" class="file-upload-label">
+                    <div class="file-upload-design">
+                        <svg class="file-upload-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-4-4V7a4 4 0 014-4h10a4 4 0 014 4v5a4 4 0 01-4 4H7z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16v-4m0 0l-2 2m2-2l2 2"></path></svg>
+                        <p class="file-upload-text">Drag & drop your file here or click to browse</p>
+                        <span class="file-upload-browse">Browse</span>
+                    </div>
+                    <input type="file" id="csvFile" accept=".csv">
+                </label>
                 <p class="form-text">CSV must contain at least 'symbol' and 'quantity' columns. Optional: 'buyingRate', 'category', 'purchaseDate', 'currency'.</p>
             </div>
+
             <div id="dataMessage" class="message"></div>
             <div class="form-actions">
                  <button type="button" onclick="goToStep(3)" class="btn btn-secondary">Skip Import</button>
